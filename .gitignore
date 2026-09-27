@@ -1,0 +1,24 @@
+# Dependencies and build output
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Tool caches
+.vite/
+.vitest/
+coverage/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Local agent config and planning notes (never shipped)
+.claude/
+docs/internal/
+tasks/todo.md
+tasks/lessons.md
+
+# Case data and exported reports must never be committed
+*.shadowclock.report.json
+cases/

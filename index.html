@@ -1,0 +1,111 @@
+<!doctype html>
+<!--
+  index.html — page shell of ShadowClock.
+  Defines: the static layout (top bar, input column, results column, help dialog).
+  Used by: Vite (entry point), Cloudflare Pages (served as the site root).
+  Depends on: src/main.ts, src/styles.css.
+-->
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Estimate when (or where) a photo was taken from the shadows in it — with honest uncertainties. Runs entirely in your browser." />
+    <title>ShadowClock — time and place from shadows</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <a class="skip" href="#results">Skip to results</a>
+    <div id="print-header" class="print-only"></div>
+    <header class="topbar">
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="22" cy="9" r="5" class="logo-sun" />
+          <path d="M9 27V11" class="logo-pole" />
+          <path d="M9 27h18" class="logo-shadow" />
+        </svg>
+        <div>
+          <h1>ShadowClock</h1>
+          <p class="tagline">Time &amp; place from shadows</p>
+        </div>
+      </div>
+      <nav id="mode-switch" class="mode-switch" aria-label="Mode"></nav>
+      <div class="actions">
+        <details class="menu" id="examples-menu">
+          <summary class="btn ghost">Examples</summary>
+          <div class="menu-list" role="menu" id="examples-list"></div>
+        </details>
+        <button type="button" class="btn ghost icon-only" id="share-btn" title="Copy a link that restores this case" aria-label="Copy share link"></button>
+        <details class="menu" id="export-menu">
+          <summary class="btn ghost icon-only" title="Export" aria-label="Export"></summary>
+          <div class="menu-list right" role="menu">
+            <button type="button" role="menuitem" id="export-json">Download report (JSON)</button>
+            <button type="button" role="menuitem" id="export-print">Print / save as PDF</button>
+            <hr />
+            <button type="button" role="menuitem" id="new-case">Start a new case</button>
+          </div>
+        </details>
+        <button type="button" class="btn ghost icon-only" id="theme-btn" aria-label="Colour theme"></button>
+        <button type="button" class="btn ghost icon-only" id="help-btn" aria-label="How it works"></button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <div class="inputs" id="inputs" aria-label="Inputs"></div>
+      <section class="results" id="results" aria-label="Results" tabindex="-1">
+        <div class="status" id="status" aria-live="polite">
+          <progress id="progress" max="1" value="0" hidden></progress>
+          <span id="status-text"></span>
+        </div>
+        <div id="results-body"></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        Everything is computed in your browser; nothing you enter is sent anywhere. Map tiles
+        load only if you enable them. Solar positions: NREL SPA.
+      </p>
+    </footer>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <dialog id="help" aria-labelledby="help-title">
+      <form method="dialog" class="dialog-close"><button class="btn ghost icon-only" aria-label="Close">✕</button></form>
+      <h2 id="help-title">How ShadowClock works</h2>
+      <p>
+        A vertical object of height <em>H</em> casts a shadow of length <em>L</em> on level ground.
+        The Sun's elevation is then <em>h = atan(H / L)</em>, and it stands opposite the shadow's
+        direction. ShadowClock searches for every instant (or place) where the Sun was at that
+        position, using the NREL Solar Position Algorithm.
+      </p>
+      <h3>Find the time</h3>
+      <ol>
+        <li>Enter the place, and how precisely you know it.</li>
+        <li>Measure one or more shadows. Add a second object in the same photo, or another photo of the same place with its time offset (EXIF differences are usually exact even when the camera clock is wrong).</li>
+        <li>Narrow the search with what you know: years, months, time of day.</li>
+      </ol>
+      <h3>Find the place</h3>
+      <p>
+        Give each shadow the UTC time it was taken. One shadow places you on a ring around the
+        point where the Sun was overhead; each extra shadow at another time adds a ring, and
+        the rings cross at the answer.
+      </p>
+      <h3>Reading the results honestly</h3>
+      <ul>
+        <li><strong>Twice a year:</strong> the Sun follows almost the same path on two dates placed symmetrically around a solstice, so a shadow usually matches two periods per year. Near a solstice they merge into one wide period.</li>
+        <li><strong>No year:</strong> the Sun's path repeats every year. Shadows cannot tell years apart.</li>
+        <li><strong>Uncertainty:</strong> ± values are one standard deviation (Gaussian); min–max values are hard bounds. The penumbra (the Sun is 0.53° wide), tilt of the object and refraction are included. 68 / 95 / 99.7 % regions follow the χ² distribution of the combined shadows.</li>
+        <li><strong>Probabilities</strong> compare the solutions assuming every allowed instant was equally likely beforehand.</li>
+      </ul>
+      <h3>Assumptions</h3>
+      <ul>
+        <li>The object is vertical (within the tilt you give) and the ground is flat and level where the shadow falls.</li>
+        <li>Lengths and directions are measured in the real scene or on a rectified image — perspective in a raw photo distorts both.</li>
+        <li>Azimuths are relative to true north; convert compass readings with the local magnetic declination.</li>
+      </ul>
+    </dialog>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
