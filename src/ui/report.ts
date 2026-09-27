@@ -38,9 +38,15 @@ export async function exportReport(state: AppState, solved: Solved | null): Prom
   const inputs = JSON.stringify(state);
   const results =
     solved?.mode === "time"
-      ? { clusters: solved.res.clusters, warnings: solved.res.warnings, observations: solved.res.observations }
+      ? {
+          // WHY drop `probability`: with declared bounds it is only a duration share, and a
+          // forensic report must not present it as a probability.
+          clusters: solved.res.clusters.map(({ probability: _p, ...c }) => c),
+          warnings: solved.res.warnings,
+          observations: solved.res.observations,
+        }
       : solved?.mode === "place"
-        ? { regions: solved.res.regions, resolutionDeg: solved.res.resolutionDeg, cellCount: solved.res.cells.length, cells: solved.res.cells, warnings: solved.res.warnings, observations: solved.res.observations }
+        ? { regions: solved.res.regions.map(({ probability: _p, ...r }) => r), resolutionDeg: solved.res.resolutionDeg, cellCount: solved.res.cells.length, cells: solved.res.cells, warnings: solved.res.warnings, observations: solved.res.observations }
         : null;
   const report = {
     application: { name: APP_NAME, version: APP_VERSION, url: location.origin + location.pathname },
@@ -49,11 +55,9 @@ export async function exportReport(state: AppState, solved: Solved | null): Prom
     method: {
       solarPosition: "NREL SPA (Reda & Andreas 2004), stated accuracy ±0.0003°; hourly-interpolated geocentric terms (error < 1e-5°)",
       deltaT: "Espenak & Meeus (2006) polynomials unless overridden",
-      refraction: "SPA refraction for apparent elevation; Bennett (1982) for the measurement correction with relative 1σ uncertainty " + cfg.REFRACTION_REL_SIGMA,
+      refraction: "SPA refraction for apparent elevation; Bennett (1982) for the measurement correction, bounded at ± " + 2 * cfg.REFRACTION_REL_SIGMA * 100 + " %",
       sunSemiDiameterDeg: cfg.SUN_SEMI_DIAMETER_DEG,
-      scoring: "Joint χ² over all shadows with covariance propagation of location/time uncertainty; range inputs as hard bounds",
-      confidenceLevels: cfg.CONFIDENCE_LEVELS,
-      acceptLevel: cfg.ACCEPT_LEVEL,
+      uncertaintyModel: "Operator-declared tolerances treated as hard bounds; physical terms and place/time tolerances propagated as bounds; a time or place is reported when it lies inside every bound",
       coarseStepS: cfg.COARSE_STEP_S,
       fineStepS: cfg.FINE_STEP_S,
     },

@@ -303,7 +303,9 @@ export class HeatmapView {
     const ms = this.msAt(di, si + 0.5);
     const when = `${fmtDate(ms, this.zone, this.lon)} ${fmtTime(ms, this.zone, this.lon)}`;
     let what: string;
+    const boundsOnly = this.levels.l68 === this.levels.l997;
     if (Number.isNaN(v)) what = "excluded by your constraints";
+    else if (boundsOnly) what = v <= 1 ? "possible (inside every declared bound)" : `outside (${v.toFixed(1)}× the declared bound)`;
     else if (v <= this.levels.l68) what = "inside the 68 % region";
     else if (v <= this.levels.l95) what = "inside the 95 % region";
     else if (v <= this.levels.l997) what = "inside the 99.7 % region";

@@ -3,7 +3,8 @@
  *
  * Defines: renderSite(), renderSearchArea().
  * Used by: main.ts.
- * Depends on: ui/dom.ts, ui/state.ts, ui/map.ts, ui/request.ts, ui/format.ts, core/parse.ts.
+ * Depends on: ui/dom.ts, ui/state.ts, ui/map.ts, ui/request.ts, ui/format.ts, ui/presets.ts,
+ *             core/parse.ts.
  */
 
 import { parseLocation } from "../../core/parse";
@@ -11,6 +12,7 @@ import { field, h, segmented, replace } from "../dom";
 import { fmtLatLon } from "../format";
 import { mountSiteMap, type SiteMap } from "../map";
 import { parseNumber } from "../request";
+import { RADIUS_PRESETS } from "../presets";
 import type { Store } from "../state";
 
 let siteMap: SiteMap | null = null;
@@ -21,7 +23,17 @@ function radiusM(s: Store["state"]): number {
   return (Number.isFinite(r) ? r : 0) * (s.site.radiusUnit === "km" ? 1000 : 1);
 }
 
-export function renderSite(root: HTMLElement, store: Store, invalid: Set<string>): void {
+/** One-line summary for the collapsed guided step. */
+export function siteSummary(s: Store["state"]): string {
+  const ll = parseLocation(s.site.loc);
+  if (!ll) return "Not set";
+  const p = RADIUS_PRESETS.find((x) => x.radius === s.site.radius && x.unit === s.site.radiusUnit);
+  return `${fmtLatLon(ll.lat, ll.lon, 4)} · within ${s.site.radius} ${s.site.radiusUnit}${p ? ` (${p.label.toLowerCase()})` : ""}`;
+}
+
+let customRadius = false;
+
+export function renderSite(root: HTMLElement, store: Store, invalid: Set<string>, guided = false): void {
   const s = store.state;
   const status = h("small", { class: "hint", "aria-live": "polite" });
   const showStatus = () => {
@@ -55,9 +67,38 @@ export function renderSite(root: HTMLElement, store: Store, invalid: Set<string>
     store.update((st) => (st.site.loc = text), true);
   });
 
+  // Radius presets as plain-language chips; the exact field stays one click away.
+  const current = RADIUS_PRESETS.find((p) => p.radius === s.site.radius && p.unit === s.site.radiusUnit);
+  const showExact = !guided || customRadius || !current;
+  const chips = h(
+    "div",
+    { class: "stack tight" },
+    h("span", { class: "field-label" }, "How precisely do you know the place?"),
+    h(
+      "div",
+      { class: "chips", role: "group", "aria-label": "Place precision" },
+      RADIUS_PRESETS.map((p) =>
+        h("button", {
+          type: "button",
+          class: `chip-btn${current === p && !customRadius ? " on" : ""}`,
+          "aria-pressed": current === p && !customRadius ? "true" : "false",
+          title: `${p.radius} ${p.unit}`,
+          onclick: () => {
+            customRadius = false;
+            store.update((st) => { st.site.radius = p.radius; st.site.radiusUnit = p.unit; }, true);
+          },
+        }, p.label),
+      ),
+      guided
+        ? h("button", { type: "button", class: `chip-btn${showExact ? " on" : ""}`, "aria-pressed": showExact ? "true" : "false", onclick: () => { customRadius = true; store.update(() => {}, true); } }, "Other…")
+        : null,
+    ),
+  );
+
   replace(root, 
     locInput,
-    h(
+    chips,
+    showExact && h(
       "div",
       { class: "row" },
       h(

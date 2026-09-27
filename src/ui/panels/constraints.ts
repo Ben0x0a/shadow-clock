@@ -2,12 +2,12 @@
  * constraints.ts — the "When could it be?" panel (time mode): years, time zone, months,
  * time of day and absolute bounds.
  *
- * Defines: renderConstraints().
- * Used by: main.ts.
+ * Defines: renderConstraints(), constraintsSummary().
+ * Used by: main.ts (expert view), ui/guided.ts.
  * Depends on: ui/dom.ts, ui/state.ts, ui/format.ts.
  */
 
-import { field, h } from "../dom";
+import { field, h, replace } from "../dom";
 import { MONTH_NAMES } from "../format";
 import type { AppState, Store } from "../state";
 
@@ -19,7 +19,19 @@ function ianaZones(): string[] {
   return zoneList;
 }
 
-export function renderConstraints(root: HTMLElement, store: Store, invalid: Set<string>): void {
+/** One-line summary for the collapsed guided step. */
+export function constraintsSummary(s: AppState): string {
+  const c = s.cons;
+  const years = c.yearFrom === c.yearTo || !c.yearTo ? c.yearFrom : `${c.yearFrom}–${c.yearTo}`;
+  const zone = c.zoneKind === "utc" ? "UTC" : c.zoneKind === "solar" ? "solar time" : c.zoneValue || c.zoneKind;
+  const extra: string[] = [];
+  if (!c.months.every(Boolean)) extra.push(c.months.map((m, i) => (m ? MONTH_NAMES[i] : "")).filter(Boolean).join(" "));
+  if (c.todFrom && c.todTo) extra.push(`${c.todFrom}–${c.todTo}`);
+  if (c.notBefore || c.notAfter) extra.push("date bounds");
+  return [years, zone, ...extra].join(" · ");
+}
+
+export function renderConstraints(root: HTMLElement, store: Store, invalid: Set<string>, guided = false): void {
   const s = store.state;
   const upd = (fn: (s: AppState) => void, structural = false) => store.update(fn, structural);
   const nowY = new Date().getUTCFullYear();
@@ -43,9 +55,9 @@ export function renderConstraints(root: HTMLElement, store: Store, invalid: Set<
         { id: zoneSelectId, onchange: (e: Event) => upd((st) => (st.cons.zoneKind = (e.target as HTMLSelectElement).value as AppState["cons"]["zoneKind"]), true) },
         ([
           ["utc", "UTC"],
-          ["iana", "Time zone (DST aware)"],
-          ["offset", "Fixed UTC offset"],
-          ["solar", "Local mean solar time"],
+          ["iana", "Time zone"],
+          ["offset", "UTC offset"],
+          ["solar", "Solar time"],
         ] as const).map(([v, l]) => h("option", { value: v, selected: s.cons.zoneKind === v }, l)),
       ),
     ),
@@ -98,22 +110,7 @@ export function renderConstraints(root: HTMLElement, store: Store, invalid: Set<
     );
   };
 
-  root.replaceChildren(
-    h("p", { class: "section-intro" }, "Anything you already know narrows the answer. Shadows cannot tell years apart, so give the years to consider."),
-    h(
-      "div",
-      { class: "row" },
-      field({ label: "From year", value: s.cons.yearFrom, name: "cons.yearFrom", invalid: invalid.has("cons.yearFrom"), inputmode: "numeric", onInput: (v) => upd((st) => (st.cons.yearFrom = v)) }),
-      field({ label: "To year", value: s.cons.yearTo, name: "cons.yearTo", invalid: invalid.has("cons.yearTo"), inputmode: "numeric", onInput: (v) => upd((st) => (st.cons.yearTo = v)) }),
-    ),
-    h(
-      "div",
-      { class: "chip-actions" },
-      yearPresets.map(([l, a, b]) =>
-        h("button", { type: "button", class: "link", onclick: () => upd((st) => { st.cons.yearFrom = String(a); st.cons.yearTo = String(b); }, true) }, l),
-      ),
-    ),
-    zoneBlock,
+  const extras = () => [
     months,
     h(
       "fieldset",
@@ -134,6 +131,32 @@ export function renderConstraints(root: HTMLElement, store: Store, invalid: Set<
       ),
       h("small", { class: "hint" }, "E.g. the upload date, or when a building visible in the photo was finished."),
     ),
+  ];
+
+  replace(root,
+    h("p", { class: "section-intro" }, "Anything you already know narrows the answer. Shadows cannot tell years apart, so give the years to consider."),
+    h(
+      "div",
+      { class: "row" },
+      field({ label: "From year", value: s.cons.yearFrom, name: "cons.yearFrom", invalid: invalid.has("cons.yearFrom"), inputmode: "numeric", onInput: (v) => upd((st) => (st.cons.yearFrom = v)) }),
+      field({ label: "To year", value: s.cons.yearTo, name: "cons.yearTo", invalid: invalid.has("cons.yearTo"), inputmode: "numeric", onInput: (v) => upd((st) => (st.cons.yearTo = v)) }),
+    ),
+    h(
+      "div",
+      { class: "chip-actions" },
+      yearPresets.map(([l, a, b]) =>
+        h("button", { type: "button", class: "link", onclick: () => upd((st) => { st.cons.yearFrom = String(a); st.cons.yearTo = String(b); }, true) }, l),
+      ),
+    ),
+    zoneBlock,
+    guided
+      ? h(
+          "details",
+          { class: "more", open: !s.cons.months.every(Boolean) || !!s.cons.todFrom || !!s.cons.notBefore || !!s.cons.notAfter },
+          h("summary", null, "More: season, time of day, dates"),
+          h("div", { class: "stack" }, ...extras()),
+        )
+      : extras(),
     h("datalist", { id: "iana-zones" }, ianaZones().map((z) => h("option", { value: z }))),
   );
 }

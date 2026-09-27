@@ -12,6 +12,6 @@ artefact is attributable.
 | `inputsSha256` | SHA-256 of the canonical JSON of `inputs` |
 | `inputs` | The form exactly as typed (restores the case) |
 | `request` | The parsed request sent to the solver (numbers, UTC epoch milliseconds) |
-| `results` | Time mode: clusters with daily windows, fits and probabilities; place mode: regions and cells. Plus warnings and the derived observations with their error budgets |
+| `results` | Time mode: clusters with daily windows and fits; place mode: regions and cells. Plus warnings and the derived observations with their error budgets |
 
 All times in `request` and `results` are UTC epoch milliseconds; angles are degrees.

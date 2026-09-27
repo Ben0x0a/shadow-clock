@@ -7,19 +7,23 @@ apparent Sun elevation is
 
   h = atan(H / L)
 
-and the Sun's azimuth is the shadow's azimuth + 180°. Every input form (lengths, ratio,
-angle) is reduced to this apparent position with an **error budget**:
+and the Sun's azimuth is the shadow's azimuth + 180°.
 
-| Term | Gaussian (`± σ`) | Range (`min–max`) |
-|---|---|---|
-| Lengths | σh² = (L²σH² + H²σL²) / (H² + L²)² (first order) | [atan(Hmin/Lmax), atan(Hmax/Lmin)] |
-| Penumbra: the Sun is a 0.53° disc, so the tip is a gradient | unknown edge: uniform ±0.267° → σ = 0.267/√3; midpoint: ±0.133° | ± 0.267° / ± 0.133° |
-| Sharp (umbra) or faint (outer) edge measured | centre shifted by −/+ 0.267°, no extra term | same |
-| Object tilt up to τ | elevation σ = τ/√3; azimuth σ = atan(sin τ · tan h)/√3 | ± τ; ± atan(sin τ · tan h) |
-| Refraction model | 10 % of Bennett's refraction at *h* (1σ) | ± 20 % |
-| Azimuth reading | as given (after magnetic declination) | as given |
+### Declared tolerances as hard bounds
 
-Gaussian terms add in quadrature; range terms add linearly (worst case).
+Every input is *value ± tolerance*, where the tolerance is declared by the operator: the
+largest error considered possible. No statistical distribution is assumed. Each input
+therefore defines an interval, and ShadowClock propagates intervals:
+
+| Term | Bound on the Sun position |
+|---|---|
+| Lengths | h ∈ [atan(Hmin/Lmax), atan(Hmax/Lmin)] (atan is monotonic) |
+| Penumbra: the Sun is a 0.53° disc, so the tip is a gradient | unknown edge: ± 0.267°; midpoint: ± 0.133°; sharp (umbra) or faint (outer) edge: centre shifted by −/+ 0.267° |
+| Object tilt up to τ | elevation ± τ; azimuth ± atan(sin τ · tan h) |
+| Refraction model | ± 20 % of Bennett's refraction at *h* |
+| Direction | declared tolerance (after magnetic declination) |
+
+Bounds add linearly (worst case). The error budget in the app lists each term.
 
 ## Sun position
 
@@ -31,18 +35,17 @@ Sun by only about 0.004°.
 
 ## Scoring a candidate
 
-For a candidate (time, place), each shadow gives residuals *r* between the predicted and the
-measured Sun. Uncertainty on the *known* side (the location radius *R* in time mode, the time
-of each photo) is propagated through the local Jacobian *J* of (elevation, azimuth):
+For a candidate (time, place), each shadow gives residuals between the predicted and the
+measured Sun. The tolerance on the *known* side (the location radius *R* in time mode, the
+time gap or time of each photo) widens each bound through the local derivatives of the
+Sun's elevation and azimuth:
 
-  C = diag(σ²) + J Σ Jᵀ,  χ² = rᵀ C⁻¹ r
+  half-width = declared + physical terms + |∂/∂t|·Δt + R·|∇|
 
-A uniform disc of radius *R* has per-axis σ = R/2. Shadows are independent, so χ² and the
-degrees of freedom add. Range components are hard bounds, widened by |∂/∂t|·Δt + R·|∇|.
+A candidate is **possible** when every residual lies inside its half-width, for every shadow.
 
-A candidate is **accepted** inside the 99.73 % region (χ² ≤ χ²₀.₉₉₇₃(k)) and inside every
-bound. Reported regions: 68.27 / 95.45 / 99.73 %, from the χ² quantiles for *k* degrees of
-freedom.
+The core also implements a Gaussian model (value ± σ, χ² with covariance propagation and
+68 / 95 / 99.7 % regions). The web app does not expose it: all inputs are declared bounds.
 
 ## Searching
 
@@ -51,20 +54,13 @@ flowchart LR
   A[Coarse scan<br/>10 min steps] -->|keep samples that could be accepted| B[Fine scan<br/>10 s steps]
   B --> C[Daily windows]
   C --> D[Clusters<br/>neighbouring days, similar time]
-  D --> E[Probabilities<br/>∫ likelihood dt]
+  D --> E[Answer<br/>possible periods]
 ```
 
 The coarse scan cannot miss a solution: it keeps a sample whenever the Sun lies within the
-largest distance an accepted position can have, plus the distance the Sun can move in half a
+largest distance a possible position can have, plus the distance the Sun can move in half a
 step (0.2507°/min, with a safety factor). The same argument, applied to observer
 displacement, makes the location grid search exhaustive.
-
-## Probabilities
-
-Cluster probabilities integrate the likelihood exp(−χ²/2)/√det C over time (or over area
-in place mode), assuming every allowed instant (or place) was equally likely beforehand.
-They compare solutions relative to each other; they do not say whether the measurements
-are correct.
 
 ## Assumptions and limits
 

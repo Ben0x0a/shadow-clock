@@ -1,14 +1,16 @@
 /**
- * shots.ts — the "Shadows" panel: one collapsible card per shadow (max 3).
+ * shots.ts — shadow cards (up to MAX_SHOTS = 4), in a guided or an expert variant.
  *
- * Defines: renderShots() (up to MAX_SHOTS = 4 shadows).
- * Used by: main.ts.
- * Depends on: ui/dom.ts, ui/state.ts, ui/request.ts, core/measurement.ts, core/parse.ts,
- *             ui/format.ts.
+ * Defines: renderShots(), shadowSummary(), addShotButtons().
+ * Used by: main.ts (expert view), ui/guided.ts (guided steps).
+ * Depends on: ui/dom.ts, ui/state.ts, ui/request.ts, core/measurement.ts, core/parse.ts.
  *
- * HOW: the panel is rebuilt on structural changes (add/remove, switching method, error
- * type, relation or azimuth). Typing only updates the state and the card's live preview,
- * so focus and caret are never lost.
+ * HOW: a card is rebuilt on structural changes (add/remove, method, error type, precision,
+ * relation). Typing only updates the state and the card's live preview, so focus and caret
+ * are never lost.
+ * Every measurement is "value ± declared tolerance" (a hard bound).
+ * Guided variant: height, shadow and optional direction; everything else sits under
+ * "More options". Expert variant: every control visible.
  */
 
 import { buildObservation } from "../../core/measurement";
@@ -22,9 +24,8 @@ const openCards = new Set<string>();
 const closedCards = new Set<string>();
 
 function comp(c: Component, digits = 2): string {
-  return c.kind === "gauss"
-    ? `${c.centre.toFixed(digits)}° ± ${c.sigma.toFixed(digits)}°`
-    : `${(c.centre - c.half).toFixed(digits)}°–${(c.centre + c.half).toFixed(digits)}°`;
+  const half = c.kind === "gauss" ? c.sigma : c.half;
+  return `${c.centre.toFixed(digits)}° ± ${half.toFixed(digits)}°`;
 }
 
 function preview(sh: ShotState, refraction: boolean): { text: string; ok: boolean } {
@@ -34,6 +35,7 @@ function preview(sh: ShotState, refraction: boolean): { text: string; ok: boolea
   if (!r.ok) return { text: r.error, ok: false };
   const o = r.obs;
   const parts = [`Sun elevation ${comp(o.elevation)}`];
+  // The ± shown includes penumbra, tilt and refraction, not only the declared tolerance.
   if (o.azimuth) parts.push(`azimuth ${comp(o.azimuth, 1)}`);
   return { text: parts.join(" · "), ok: true };
 }
@@ -55,8 +57,8 @@ function diagram(): SVGElement {
 }
 
 function compass(sh: ShotState): SVGElement {
-  const v = Number(sh.azErr === "gauss" ? sh.az : (Number(sh.azmin) + Number(sh.azmax)) / 2);
-  const ok = Number.isFinite(v) && (sh.azErr === "gauss" ? sh.az.trim() !== "" : sh.azmin.trim() !== "" && sh.azmax.trim() !== "");
+  const v = Number(sh.az.replace(",", "."));
+  const ok = Number.isFinite(v) && sh.az.trim() !== "";
   const g = svg("svg", { class: "compass", viewBox: "-30 -30 60 60", role: "img", "aria-label": ok ? `Shadow points to ${v}°, the Sun is at ${(v + 180) % 360}°` : "Compass" });
   g.append(svg("circle", { r: 26, class: "c-ring" }));
   for (const [t, a] of [["N", 0], ["E", 90], ["S", 180], ["W", 270]] as const) {
@@ -72,37 +74,67 @@ function compass(sh: ShotState): SVGElement {
   return g;
 }
 
-export function renderShots(root: HTMLElement, store: Store, invalid: Set<string>): void {
+export type ShotVariant = "guided" | "expert";
+
+export interface RenderShotsOpts {
+  variant: ShotVariant;
+  /** Indices of the shots to render (default: all). */
+  from?: number;
+  to?: number;
+  /** Show the intro paragraph and the add buttons. */
+  intro?: boolean;
+  add?: boolean;
+}
+
+/** One-line summary of a shadow for collapsed guided steps. */
+export function shadowSummary(sh: ShotState, i: number, mode: AppState["mode"]): string {
+  const f = sh.f;
+  const pm = (v: string, t: string) => `${v || "?"}${t ? ` ±${t}` : ""}`;
+  const m =
+    sh.method === "lengths" ? `${pm(f.h, f.ht)} / ${pm(f.l, f.lt)}` : sh.method === "ratio" ? `ratio ${pm(f.r, f.rt)}` : `${pm(f.a, f.at)}°`;
+  const dir = sh.azOn && sh.az.trim() ? ` · dir ${pm(sh.az, sh.azt)}°` : "";
+  return `${sh.label || `Shadow ${i + 1}`}: ${m}${dir} (${relationText(sh, i, mode)})`;
+}
+
+/** The two ways to add a shadow, phrased as a question in guided mode. */
+export function addShotButtons(store: Store): HTMLElement {
+  const s = store.state;
+  const full = s.shots.length >= MAX_SHOTS;
+  const add = (relation: "same" | "other") =>
+    store.update((st) => {
+      const n = newShot(st.shots.length);
+      n.relation = relation;
+      n.label = st.mode === "place" || relation === "other" ? `Photo ${st.shots.length + 1}` : `Object ${st.shots.length + 1}`;
+      openCards.add(n.id);
+      st.shots.push(n);
+    }, true);
+  if (full) return h("p", { class: "hint" }, `Maximum ${MAX_SHOTS} shadows reached.`);
+  return h(
+    "div",
+    { class: "add-row" },
+    s.mode === "time"
+      ? [
+          h("button", { type: "button", class: "btn add-shot", onclick: () => add("same") }, icon("plus"), h("span", null, h("strong", null, "Another object"), h("small", null, "in this same photo"))),
+          h("button", { type: "button", class: "btn add-shot", onclick: () => add("other") }, icon("plus"), h("span", null, h("strong", null, "Another photo"), h("small", null, "of this place, taken later or earlier"))),
+        ]
+      : h("button", { type: "button", class: "btn add-shot", onclick: () => add("other") }, icon("plus"), h("span", null, h("strong", null, "Another photo"), h("small", null, "taken at another time"))),
+  );
+}
+
+export function renderShots(root: HTMLElement, store: Store, invalid: Set<string>, opts: RenderShotsOpts): void {
   const s = store.state;
   const upd = (fn: (s: AppState) => void, structural = false) => store.update(fn, structural);
-
-  const cards = s.shots.map((sh, i) => shotCard(sh, i, s, () => store.state, upd, invalid));
-  const canAdd = s.shots.length < MAX_SHOTS;
+  const from = opts.from ?? 0;
+  const to = opts.to ?? s.shots.length;
+  const cards = s.shots.slice(from, to).map((sh, k) => shotCard(sh, from + k, s, () => store.state, upd, invalid, opts.variant));
   const intro =
     s.mode === "time"
       ? "Add another object in the same photo, or another photo of the same place taken a known time later — each one tightens the result."
       : "Give each photo its own time. Shadows taken at different times are crossed to pin down the place.";
-
   root.replaceChildren(
-    h("p", { class: "section-intro" }, intro),
+    ...(opts.intro ? [h("p", { class: "section-intro" }, intro)] : []),
     ...cards,
-    h(
-      "button",
-      {
-        type: "button",
-        class: "btn add-shot",
-        disabled: !canAdd,
-        onclick: () =>
-          upd((st) => {
-            const n = newShot(st.shots.length);
-            if (st.mode === "time") n.relation = "same";
-            openCards.add(n.id);
-            st.shots.push(n);
-          }, true),
-      },
-      icon("plus"),
-      canAdd ? (s.mode === "time" ? "Add a shadow (another object or photo)" : "Add a shadow from another photo") : `Maximum ${MAX_SHOTS} shadows`,
-    ),
+    ...(opts.add ? [addShotButtons(store)] : []),
   );
 }
 
@@ -113,10 +145,12 @@ function shotCard(
   live: () => AppState,
   upd: (fn: (s: AppState) => void, structural?: boolean) => void,
   invalid: Set<string>,
+  variant: ShotVariant,
 ): HTMLElement {
+  const guided = variant === "guided";
   const me = (st: AppState) => st.shots.find((x) => x.id === sh.id) as ShotState;
   const set = (fn: (x: ShotState) => void, structural = false) => upd((st) => fn(me(st)), structural);
-  const isOpen = openCards.has(sh.id) || (!closedCards.has(sh.id) && s.shots.length === 1) || (i === 0 && !closedCards.has(sh.id));
+  const isOpen = openCards.has(sh.id) || (!closedCards.has(sh.id) && (i === 0 || guided));
   const out = h("output", { class: "preview", "aria-live": "polite" });
   const badge = h("span", { class: "badge" });
   const refresh = () => {
@@ -141,23 +175,30 @@ function shotCard(
       ...opts,
     });
 
+  // A measured value and the tolerance the operator declares for it (hard bound).
   const pair = (base: string, what: string, unitHint?: string) =>
-    sh.err === "gauss"
-      ? h("div", { class: "row" }, text(base, what, { placeholder: "value", suffix: unitHint }), text(`${base}s`, "± 1σ", { placeholder: "0", suffix: unitHint }))
-      : h("div", { class: "row" }, text(`${base}min`, `${what} min`, { suffix: unitHint }), text(`${base}max`, `${what} max`, { suffix: unitHint }));
+    h(
+      "div",
+      { class: "pair" },
+      text(base, what, { placeholder: base === "a" ? "degrees" : "value", suffix: unitHint }),
+      text(`${base}t`, "±", { placeholder: "tolerance", suffix: unitHint }),
+    );
 
   const elevFields =
     sh.method === "lengths"
-      ? [pair("h", "Object height"), pair("l", "Shadow length"), h("small", { class: "hint" }, "Any unit, as long as both use the same one — only the ratio matters. Measure on flat, level ground.")]
+      ? [
+          h("div", { class: "stack" }, pair("h", "Object height"), pair("l", "Shadow length")),
+          h("small", { class: "hint" }, "Any unit, the same for both — only the ratio matters. ± is how far off each value can be at most. Measure on flat, level ground."),
+        ]
       : sh.method === "ratio"
         ? [pair("r", "Height ÷ shadow"), h("small", { class: "hint" }, "Useful when the scene gives proportions but no absolute size.")]
         : [pair("a", "Sun elevation", "°"), h("small", { class: "hint" }, "Angle of the Sun above the horizon, e.g. from a solved scene.")];
 
   // Time relation block.
-  let timeBlock: HTMLElement;
+  let timeBlock: HTMLElement | null;
   if (s.mode === "time") {
     if (i === 0) {
-      timeBlock = h("p", { class: "note" }, icon("clock", 16), "Reference photo: its date and time are what ShadowClock solves for.");
+      timeBlock = guided ? null : h("p", { class: "note" }, icon("clock", 16), "Reference photo: its date and time are what ShadowClock solves for.");
     } else {
       const parsed = parseDuration(sh.offset);
       timeBlock = h(
@@ -178,7 +219,7 @@ function shotCard(
               "div",
               { class: "row" },
               field({
-                label: "Taken after shadow 1",
+                label: "Taken after the first photo",
                 value: sh.offset,
                 name: `${sh.id}.offset`,
                 invalid: inv("offset"),
@@ -188,17 +229,17 @@ function shotCard(
                 onInput: (v) => { set((x) => (x.offset = v)); refresh(); },
               }),
               field({
-                label: "± uncertainty",
-                value: sh.offsetSigma,
-                name: `${sh.id}.offsetSigma`,
-                invalid: inv("offsetSigma"),
+                label: "± tolerance",
+                value: sh.offsetTol,
+                name: `${sh.id}.offsetTol`,
+                invalid: inv("offsetTol"),
                 placeholder: "2 s",
                 inputmode: "text",
                 hint: "EXIF differences are usually exact to 1–2 s",
-                onInput: (v) => set((x) => (x.offsetSigma = v)),
+                onInput: (v) => set((x) => (x.offsetTol = v)),
               }),
             )
-          : h("p", { class: "note" }, "Same instant as shadow 1: both shadows see exactly the same Sun."),
+          : h("p", { class: "note" }, "Same instant as the first shadow: both see exactly the same Sun."),
       );
     }
   } else {
@@ -214,191 +255,101 @@ function shotCard(
         placeholder: "2024-07-14 15:32:10",
         inputmode: "text",
         wide: true,
-        hint: p ? (p.offsetMin !== null ? "Offset read from the text" : "Paste EXIF (2024:07:14 15:32:10) or ISO 8601") : "Paste EXIF (2024:07:14 15:32:10) or ISO 8601",
+        hint: p && p.offsetMin !== null ? "Offset read from the text" : "Paste EXIF (2024:07:14 15:32:10) or ISO 8601",
         onInput: (v) => { set((x) => (x.time = v)); refresh(); },
       }),
-      field({
-        label: "UTC offset",
-        value: sh.timeOffset,
-        name: `${sh.id}.timeOffset`,
-        invalid: inv("timeOffset"),
-        placeholder: "+00:00",
-        inputmode: "text",
-        onInput: (v) => set((x) => (x.timeOffset = v)),
-      }),
-      field({
-        label: "± uncertainty",
-        value: sh.timeSigma,
-        name: `${sh.id}.timeSigma`,
-        invalid: inv("timeSigma"),
-        placeholder: "1 min",
-        inputmode: "text",
-        onInput: (v) => set((x) => (x.timeSigma = v)),
-      }),
+      field({ label: "UTC offset", value: sh.timeOffset, name: `${sh.id}.timeOffset`, invalid: inv("timeOffset"), placeholder: "+00:00", inputmode: "text", onInput: (v) => set((x) => (x.timeOffset = v)) }),
+      field({ label: "± tolerance", value: sh.timeTol, name: `${sh.id}.timeTol`, invalid: inv("timeTol"), placeholder: "1 min", inputmode: "text", onInput: (v) => set((x) => (x.timeTol = v)) }),
     );
   }
 
-  const azBlock = sh.azOn
-    ? h(
-        "div",
-        { class: "stack" },
-        h(
-          "div",
-          { class: "az-grid" },
-          h(
-            "div",
-            { class: "stack" },
-            segmented(`azerr-${sh.id}`, "Azimuth error type", [
-              { value: "gauss", label: "± σ" },
-              { value: "range", label: "min–max" },
-            ], sh.azErr, (v) => set((x) => (x.azErr = v), true), "small"),
-            sh.azErr === "gauss"
-              ? h(
-                  "div",
-                  { class: "row" },
-                  field({ label: "Shadow azimuth", value: sh.az, name: `${sh.id}.az`, invalid: inv("az"), suffix: "°", placeholder: "0–360", onInput: (v) => { set((x) => (x.az = v)); refresh(); redrawCompass(); } }),
-                  field({ label: "± 1σ", value: sh.azs, name: `${sh.id}.azs`, invalid: inv("azs"), suffix: "°", onInput: (v) => { set((x) => (x.azs = v)); refresh(); } }),
-                )
-              : h(
-                  "div",
-                  { class: "row" },
-                  field({ label: "Azimuth min", value: sh.azmin, name: `${sh.id}.azmin`, invalid: inv("azmin"), suffix: "°", onInput: (v) => { set((x) => (x.azmin = v)); refresh(); redrawCompass(); } }),
-                  field({ label: "Azimuth max", value: sh.azmax, name: `${sh.id}.azmax`, invalid: inv("azmax"), suffix: "°", onInput: (v) => { set((x) => (x.azmax = v)); refresh(); redrawCompass(); } }),
-                ),
-          ),
-          h("div", { class: "compass-wrap" }, compass(sh)),
-        ),
-        h("small", { class: "hint" }, "Direction from the object's base to the shadow tip, clockwise from north (0° = N, 90° = E)."),
-        segmented(`azref-${sh.id}`, "North reference", [
-          { value: "true", label: "True north", title: "Map / geographic north" },
-          { value: "magnetic", label: "Magnetic (compass)", title: "Compass reading: needs the local magnetic declination" },
-        ], sh.azRef, (v) => set((x) => (x.azRef = v), true), "small"),
-        sh.azRef === "magnetic"
-          ? h(
-              "div",
-              { class: "row" },
-              field({
-                label: "Declination (east +)",
-                value: sh.decl,
-                name: `${sh.id}.decl`,
-                invalid: inv("decl"),
-                suffix: "°",
-                onInput: (v) => { set((x) => (x.decl = v)); refresh(); },
-              }),
-              h("small", { class: "hint grow" }, "Look it up for the place and date, e.g. with the ", h("a", { href: "https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml", target: "_blank", rel: "noopener noreferrer" }, "NOAA calculator"), "."),
-            )
-          : null,
-      )
-    : h("p", { class: "note" }, "Without direction, every day has a morning and an afternoon solution.");
-
-  const compassHolder = azBlock.querySelector(".compass-wrap");
-  const redrawCompass = () => compassHolder?.replaceChildren(compass(me(live())));
-
-  const tipSelectId = `tip-${sh.id}`;
-  const details = h(
-    "details",
-    {
-      class: `card shot shot-${i + 1}`,
-      open: isOpen,
-      ontoggle: (e: Event) => {
-        const open = (e.currentTarget as HTMLDetailsElement).open;
-        if (open) { openCards.add(sh.id); closedCards.delete(sh.id); } else { openCards.delete(sh.id); closedCards.add(sh.id); }
+  // Direction: value ± tolerance + compass. In guided mode, typing turns the direction on.
+  const azInput = (key: "az" | "azt", label: string) =>
+    field({
+      label,
+      value: sh[key],
+      name: `${sh.id}.${key}`,
+      invalid: inv(key),
+      suffix: "°",
+      placeholder: key === "az" ? (guided ? "optional" : "0–360") : "tolerance",
+      onInput: (v) => {
+        set((x) => {
+          x[key] = v;
+          if (guided) x.azOn = true;
+        });
+        refresh();
+        redrawCompass();
       },
-    },
-    h(
-      "summary",
-      null,
-      h("span", { class: "dot", "aria-hidden": "true" }),
-      h("span", { class: "shot-title" }, sh.label || `Shadow ${i + 1}`),
-      badge,
-      out,
-    ),
-    h(
-      "div",
-      { class: "card-body" },
-      h(
-        "div",
-        { class: "row" },
-        field({
-          label: "Name",
-          value: sh.label,
-          inputmode: "text",
-          wide: true,
-          placeholder: `Shadow ${i + 1}`,
-          onInput: (v) => {
-            set((x) => (x.label = v));
-            (details.querySelector(".shot-title") as HTMLElement).textContent = v || `Shadow ${i + 1}`;
-          },
-        }),
-      ),
-      timeBlock,
-      h(
-        "fieldset",
-        { class: "group" },
-        h("legend", null, "Sun elevation"),
-        h(
-          "div",
-          { class: "elev-head" },
-          h(
-            "div",
-            { class: "stack" },
-            segmented(`method-${sh.id}`, "Elevation from", [
-              { value: "lengths", label: "Height + shadow" },
-              { value: "ratio", label: "Ratio" },
-              { value: "angle", label: "Angle" },
-            ], sh.method, (v) => set((x) => (x.method = v), true)),
-            segmented(`err-${sh.id}`, "Error type", [
-              { value: "gauss", label: "± σ", title: "Gaussian: value ± one standard deviation" },
-              { value: "range", label: "min–max", title: "Hard bounds: the true value is certainly inside" },
-            ], sh.err, (v) => set((x) => (x.err = v), true), "small"),
-          ),
-          diagram(),
-        ),
-        ...elevFields,
-        h(
+    });
+  const azValues = h("div", { class: "pair" }, azInput("az", "Shadow direction"), azInput("azt", "±"));
+  const compassHolder = h("div", { class: "compass-wrap" }, compass(sh));
+  const redrawCompass = () => compassHolder.replaceChildren(compass(me(live())));
+  const azMain = h(
+    "div",
+    { class: "az-grid" },
+    h("div", { class: "stack" }, azValues, h("small", { class: "hint" }, "From the object's base to the shadow tip, clockwise from true north (0° = N, 90° = E).", guided ? " Leave empty if unknown." : "")),
+    compassHolder,
+  );
+  const azRefBlock = h(
+    "div",
+    { class: "stack" },
+    segmented(`azref-${sh.id}`, "North reference", [
+      { value: "true", label: "True north", title: "Map / geographic north" },
+      { value: "magnetic", label: "Magnetic (compass)", title: "Compass reading: needs the local magnetic declination" },
+    ], sh.azRef, (v) => set((x) => (x.azRef = v), true), "small"),
+    sh.azRef === "magnetic"
+      ? h(
           "div",
           { class: "row" },
-          h(
-            "div",
-            { class: "field" },
-            h("label", { for: tipSelectId }, "Shadow tip measured at"),
-            h(
-              "select",
-              { id: tipSelectId, onchange: (e: Event) => { set((x) => (x.tip = (e.target as HTMLSelectElement).value as TipEdge)); refresh(); } },
-              ([
-                ["unknown", "Not sure (± 0.27°)"],
-                ["midpoint", "Middle of soft edge"],
-                ["umbra", "Sharp inner edge"],
-                ["outer", "Faint outer edge"],
-              ] as const).map(([v, l]) => h("option", { value: v, selected: sh.tip === v }, l)),
-            ),
-          ),
-          field({
-            label: "Object may lean up to",
-            value: sh.tilt,
-            name: `${sh.id}.tilt`,
-            invalid: inv("tilt"),
-            suffix: "°",
-            onInput: (v) => { set((x) => (x.tilt = v)); refresh(); },
-          }),
-        ),
-      ),
+          field({ label: "Declination (east +)", value: sh.decl, name: `${sh.id}.decl`, invalid: inv("decl"), suffix: "°", onInput: (v) => { set((x) => (x.decl = v)); refresh(); } }),
+          h("small", { class: "hint grow" }, "Look it up for the place and date, e.g. with the ", h("a", { href: "https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml", target: "_blank", rel: "noopener noreferrer" }, "NOAA calculator"), "."),
+        )
+      : null,
+  );
+
+  const nameField = field({
+    label: "Name",
+    value: sh.label,
+    inputmode: "text",
+    wide: true,
+    placeholder: `Shadow ${i + 1}`,
+    onInput: (v) => {
+      set((x) => (x.label = v));
+      (details.querySelector(".shot-title") as HTMLElement).textContent = v || `Shadow ${i + 1}`;
+    },
+  });
+  const methodSegs = segmented(`method-${sh.id}`, "Elevation from", [
+    { value: "lengths", label: "Height + shadow" },
+    { value: "ratio", label: "Ratio" },
+    { value: "angle", label: "Angle" },
+  ], sh.method, (v) => set((x) => (x.method = v), true));
+  const tipSelectId = `tip-${sh.id}`;
+  const tipTilt = h(
+    "div",
+    { class: "row" },
+    h(
+      "div",
+      { class: "field" },
+      h("label", { for: tipSelectId }, "Shadow tip measured at"),
       h(
-        "fieldset",
-        { class: "group" },
-        h("legend", null, "Shadow direction"),
-        h(
-          "label",
-          { class: "switch" },
-          h("input", { type: "checkbox", role: "switch", checked: sh.azOn, onchange: (e: Event) => set((x) => (x.azOn = (e.target as HTMLInputElement).checked), true) }),
-          h("span", null, "I know which way the shadow points"),
-        ),
-        azBlock,
+        "select",
+        { id: tipSelectId, onchange: (e: Event) => { set((x) => (x.tip = (e.target as HTMLSelectElement).value as TipEdge)); refresh(); } },
+        ([
+          ["unknown", "Not sure (± 0.27°)"],
+          ["midpoint", "Middle of soft edge"],
+          ["umbra", "Sharp inner edge"],
+          ["outer", "Faint outer edge"],
+        ] as const).map(([v, l]) => h("option", { value: v, selected: sh.tip === v }, l)),
       ),
-      h(
-        "div",
-        { class: "card-actions" },
-        h(
+    ),
+    field({ label: "Object may lean up to", value: sh.tilt, name: `${sh.id}.tilt`, invalid: inv("tilt"), suffix: "°", onInput: (v) => { set((x) => (x.tilt = v)); refresh(); } }),
+  );
+  const actions = h(
+    "div",
+    { class: "card-actions" },
+    guided
+      ? null
+      : h(
           "button",
           {
             type: "button",
@@ -415,16 +366,64 @@ function shotCard(
           icon("copy", 16),
           "Duplicate",
         ),
-        s.shots.length > 1
-          ? h(
-              "button",
-              { type: "button", class: "btn ghost danger", onclick: () => upd((st) => (st.shots = st.shots.filter((x) => x.id !== sh.id)), true) },
-              icon("trash", 16),
-              "Remove",
-            )
-          : null,
-      ),
-    ),
+    s.shots.length > 1
+      ? h("button", { type: "button", class: "btn ghost danger", onclick: () => upd((st) => (st.shots = st.shots.filter((x) => x.id !== sh.id)), true) }, icon("trash", 16), "Remove")
+      : null,
+  );
+
+  const body = guided
+    ? [
+        timeBlock,
+        h("div", { class: "elev-head" }, h("div", { class: "stack grow" }, ...elevFields), diagram()),
+        azMain,
+        h(
+          "details",
+          { class: "more" },
+          h("summary", null, "More options"),
+          h(
+            "div",
+            { class: "stack" },
+            nameField,
+            h("span", { class: "field-label" }, "Measure the Sun elevation from"),
+            methodSegs,
+            tipTilt,
+            h("span", { class: "field-label" }, "North reference for the direction"),
+            azRefBlock,
+          ),
+        ),
+        actions,
+      ]
+    : [
+        h("div", { class: "row" }, nameField),
+        timeBlock,
+        h("fieldset", { class: "group" }, h("legend", null, "Sun elevation"), h("div", { class: "elev-head" }, methodSegs, diagram()), ...elevFields, tipTilt),
+        h(
+          "fieldset",
+          { class: "group" },
+          h("legend", null, "Shadow direction"),
+          h(
+            "label",
+            { class: "switch" },
+            h("input", { type: "checkbox", role: "switch", checked: sh.azOn, onchange: (e: Event) => set((x) => (x.azOn = (e.target as HTMLInputElement).checked), true) }),
+            h("span", null, "I know which way the shadow points"),
+          ),
+          sh.azOn ? h("div", { class: "stack" }, azMain, azRefBlock) : h("p", { class: "note" }, "Without direction, every day has a morning and an afternoon solution."),
+        ),
+        actions,
+      ];
+
+  const details = h(
+    "details",
+    {
+      class: `card shot shot-${i + 1}`,
+      open: isOpen,
+      ontoggle: (e: Event) => {
+        const open = (e.currentTarget as HTMLDetailsElement).open;
+        if (open) { openCards.add(sh.id); closedCards.delete(sh.id); } else { openCards.delete(sh.id); closedCards.add(sh.id); }
+      },
+    },
+    h("summary", null, h("span", { class: "dot", "aria-hidden": "true" }), h("span", { class: "shot-title" }, sh.label || `Shadow ${i + 1}`), badge, out),
+    h("div", { class: "card-body" }, ...body.filter((x): x is HTMLElement => !!x)),
   );
   refresh();
   return details;

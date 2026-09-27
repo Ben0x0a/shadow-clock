@@ -31,11 +31,27 @@
       </div>
       <nav id="mode-switch" class="mode-switch" aria-label="Mode"></nav>
       <div class="actions">
+        <label class="switch compact" title="Show every option at once">
+          <input type="checkbox" role="switch" id="expert-toggle" />
+          <span>Expert view</span>
+        </label>
         <details class="menu" id="examples-menu">
           <summary class="btn ghost">Examples</summary>
           <div class="menu-list" role="menu" id="examples-list"></div>
         </details>
-        <button type="button" class="btn ghost icon-only" id="share-btn" title="Copy a link that restores this case" aria-label="Copy share link"></button>
+        <details class="menu" id="share-menu">
+          <summary class="btn ghost icon-only" title="Share" aria-label="Share"></summary>
+          <div class="menu-list right" role="menu">
+            <button type="button" role="menuitem" id="share-tool">
+              <strong>Copy link to the tool</strong>
+              <small>A clean link with no data: safe to post anywhere.</small>
+            </button>
+            <button type="button" role="menuitem" id="share-calc">
+              <strong>Copy link to this calculation</strong>
+              <small class="warn-text">Contains all your inputs (place, times, measurements). Share only with people allowed to see the case.</small>
+            </button>
+          </div>
+        </details>
         <details class="menu" id="export-menu">
           <summary class="btn ghost icon-only" title="Export" aria-label="Export"></summary>
           <div class="menu-list right" role="menu">
@@ -95,8 +111,7 @@
       <ul>
         <li><strong>Twice a year:</strong> the Sun follows almost the same path on two dates placed symmetrically around a solstice, so a shadow usually matches two periods per year. Near a solstice they merge into one wide period.</li>
         <li><strong>No year:</strong> the Sun's path repeats every year. Shadows cannot tell years apart.</li>
-        <li><strong>Uncertainty:</strong> ± values are one standard deviation (Gaussian); min–max values are hard bounds. The penumbra (the Sun is 0.53° wide), tilt of the object and refraction are included. 68 / 95 / 99.7 % regions follow the χ² distribution of the combined shadows.</li>
-        <li><strong>Probabilities</strong> compare the solutions assuming every allowed instant was equally likely beforehand.</li>
+        <li><strong>Uncertainty:</strong> every measurement is a value ± a tolerance that you declare: the largest error you consider possible. ShadowClock treats it as a hard bound and adds the physical terms it knows about (the Sun is 0.53° wide, so the shadow tip is fuzzy; the object may lean; refraction), all shown in the error budget. A time is listed when it fits inside every bound.</li>
       </ul>
       <h3>Assumptions</h3>
       <ul>

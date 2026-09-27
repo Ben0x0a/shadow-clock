@@ -149,7 +149,7 @@ export function updateClaim(store: Store, zone: Zone, lon: number, timeResult: T
           null,
           ok.length
             ? `Compatible offsets: ${ranges(ok.map((x) => x.offsetMin))}. The time zone at the place during that season should be one of these — otherwise the camera clock or the claim is wrong.`
-            : "The date itself is probably wrong (or the measurements are). Use the solutions list for compatible dates.",
+            : "Either the date or the measurements are wrong. The solutions list shows the compatible dates.",
         ),
       ),
     ),

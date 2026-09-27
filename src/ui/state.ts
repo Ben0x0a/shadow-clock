@@ -2,9 +2,13 @@
  * state.ts — the single application state (form text as typed) and its persistence.
  *
  * Defines: AppState / ShotState types, defaultState(), newShot(), Store (subscribe/update),
- *          encodeState()/decodeState() for the URL hash.
+ *          encodeState()/decodeState() for calculation links and the tab's session copy.
  * Used by: main.ts, ui/request.ts, ui/panels/*, ui/results/*, ui/examples.ts, ui/report.ts.
- * Depends on: core/models.ts (TipEdge), core/config.ts (MAX_YEAR).
+ * Depends on: core/models.ts (TipEdge).
+ *
+ * Uncertainty model: every measurement is "value ± tolerance", where the tolerance is
+ * declared by the operator and treated as a hard bound (the true value is certainly
+ * inside). An empty tolerance is an error, never a silent zero.
  *
  * WHY: the state keeps the raw strings the user typed rather than parsed numbers, so a
  * restored or shared link shows exactly what was entered (units, DMS, EXIF text), and
@@ -15,7 +19,6 @@ import type { TipEdge } from "../core/models";
 
 export type Mode = "time" | "place";
 export type ElevMethod = "lengths" | "ratio" | "angle";
-export type Err = "gauss" | "range";
 
 export interface ShotState {
   id: string;
@@ -23,23 +26,20 @@ export interface ShotState {
   /** Time mode, shots 2+: another object in the same photo, or another photo. */
   relation: "same" | "other";
   offset: string;
-  offsetSigma: string;
+  offsetTol: string;
   /** Place mode: date and time of this shot, and its UTC offset. */
   time: string;
   timeOffset: string;
-  timeSigma: string;
+  timeTol: string;
   method: ElevMethod;
-  err: Err;
-  /** Elevation fields by key: h, hs, hmin, hmax, l, ls, lmin, lmax, r, rs, rmin, rmax, a, as, amin, amax. */
+  /** Elevation fields: value and declared tolerance — h/ht, l/lt, r/rt, a/at. */
   f: Record<string, string>;
   tip: TipEdge;
   tilt: string;
   azOn: boolean;
-  azErr: Err;
   az: string;
-  azs: string;
-  azmin: string;
-  azmax: string;
+  /** Declared tolerance of the shadow direction, degrees. */
+  azt: string;
   azRef: "true" | "magnetic";
   decl: string;
 }
@@ -74,21 +74,17 @@ export function newShot(index: number): ShotState {
     label: `Shadow ${index + 1}`,
     relation: "same",
     offset: "",
-    offsetSigma: "",
+    offsetTol: "",
     time: "",
     timeOffset: "+00:00",
-    timeSigma: "",
+    timeTol: "",
     method: "lengths",
-    err: "gauss",
-    f: { h: "", hs: "", hmin: "", hmax: "", l: "", ls: "", lmin: "", lmax: "", r: "", rs: "", rmin: "", rmax: "", a: "", as: "", amin: "", amax: "" },
+    f: { h: "", ht: "", l: "", lt: "", r: "", rt: "", a: "", at: "" },
     tip: "unknown",
     tilt: "1",
     azOn: true,
-    azErr: "gauss",
     az: "",
-    azs: "2",
-    azmin: "",
-    azmax: "",
+    azt: "",
     azRef: "true",
     decl: "0",
   };
@@ -141,7 +137,7 @@ export class Store {
   }
 }
 
-// ---- URL hash persistence ------------------------------------------------------------
+// ---- Serialisation (share links, sessionStorage) ------------------------------------------------------------
 
 function toBase64Url(bytes: Uint8Array): string {
   let bin = "";

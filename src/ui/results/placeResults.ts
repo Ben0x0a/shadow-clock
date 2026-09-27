@@ -10,7 +10,7 @@
 
 import type { GeoCell, GeoRegion, LocationSolveRequest, LocationSolveResult } from "../../core/models";
 import { h, icon, replace } from "../dom";
-import { fmtLatLon, fmtPct } from "../format";
+import { fmtLatLon } from "../format";
 import { mountResultMap, onTilesChange, type ResultMap, setTilesEnabled, tilesEnabled } from "../map";
 import { renderBudget } from "./budget";
 import { cssVar, heatPalette, misfitLevels } from "./colours";
@@ -103,16 +103,22 @@ export class PlaceResultsView {
   private list = h("section", { class: "card result" });
   private budget = h("div");
   private map: ResultMap | null = null;
+  readonly evidence: HTMLDetailsElement;
   private last: LocationSolveResult | null = null;
 
   constructor() {
+    this.evidence = h(
+      "details",
+      { class: "evidence" },
+      h("summary", { class: "evidence-toggle" }, h("span", null, h("strong", null, "Show the evidence"), h("small", null, "Every candidate area, error budget"))),
+      h("div", { class: "results-stack" }, this.list, h("details", { class: "card result" }, h("summary", null, h("h3", null, "Error budget")), this.budget)),
+    );
     this.el = h(
       "div",
       { class: "results-stack" },
       this.summary,
       h("section", { class: "card result" }, h("div", { class: "card-head" }, h("h3", null, "Where it could be")), this.mapHost),
-      this.list,
-      h("details", { class: "card result" }, h("summary", null, h("h3", null, "Error budget")), this.budget),
+      this.evidence,
     );
     onTilesChange(() => this.last && this.drawMap(this.last, null));
   }
@@ -148,14 +154,16 @@ export class PlaceResultsView {
     const top = res.regions.slice(0, 3);
     replace(this.summary, 
       res.regions.length
-        ? h("p", { class: "headline" }, res.regions.length === 1 ? "One candidate area" : `${res.regions.length} candidate areas`, res.regions.length > 1 ? `, the most likely holds ${fmtPct(res.regions[0].probability)}` : "", ".")
+        ? h("p", { class: "eyebrow" }, "Answer")
+        : null,
+      res.regions.length
+        ? h("p", { class: "headline" }, res.regions.length === 1 ? "One candidate area" : `${res.regions.length} candidate areas`, ".")
         : h("p", { class: "headline bad" }, "No compatible place found."),
       top.length
         ? h("ol", { class: "answers" }, top.map((r) =>
             h("li", null, h("button", { type: "button", class: "answer", onclick: () => this.focus(r.id) },
               h("span", { class: "num-badge" }, String(r.id + 1)),
-              h("span", { class: "answer-main" }, `${fmtLatLon(r.bestLat, r.bestLon, 3)} · ${fmtArea(r.areaKm2)}`),
-              h("span", { class: "answer-prob" }, fmtPct(r.probability)),
+              h("span", { class: "answer-main" }, `around ${fmtLatLon(r.bestLat, r.bestLon, 3)} · ${fmtArea(r.areaKm2)}`),
             )),
           ))
         : null,
@@ -172,7 +180,7 @@ export class PlaceResultsView {
         h(
           "table",
           { class: "windows" },
-          h("thead", null, h("tr", null, ["#", "Best point", "Extent (S, W – N, E)", "Area", "Probability", ""].map((t) => h("th", { scope: "col" }, t)))),
+          h("thead", null, h("tr", null, ["#", "Centre", "Extent (S, W – N, E)", "Area", ""].map((t) => h("th", { scope: "col" }, t)))),
           h("tbody", null, res.regions.slice(0, 50).map((r) =>
             h(
               "tr",
@@ -181,7 +189,6 @@ export class PlaceResultsView {
               h("td", { class: "num" }, fmtLatLon(r.bestLat, r.bestLon, 4)),
               h("td", { class: "num muted" }, `${r.bounds[0].toFixed(2)}, ${r.bounds[1].toFixed(2)} – ${r.bounds[2].toFixed(2)}, ${r.bounds[3].toFixed(2)}`),
               h("td", { class: "num" }, fmtArea(r.areaKm2)),
-              h("td", { class: "num" }, fmtPct(r.probability)),
               h(
                 "td",
                 { class: "row-actions" },

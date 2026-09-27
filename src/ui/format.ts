@@ -1,8 +1,7 @@
 /**
  * format.ts — display formatting of instants, spans, angles and coordinates.
  *
- * Defines: fmtDateTime(), fmtDate(), fmtTime(), fmtSpan(), fmtDeg(), fmtLatLon(), fmtPct(),
- *          fmtSolar().
+ * Defines: fmtDateTime(), fmtDate(), fmtTime(), fmtSpan(), fmtDeg(), fmtLatLon(), fmtSolar().
  * Used by: ui/results/*.ts, ui/panels/*.ts, ui/report.ts.
  * Depends on: core/zone.ts, core/models.ts.
  */
@@ -52,12 +51,6 @@ export function fmtDeg(v: number, digits = 2): string {
 
 export function fmtLatLon(lat: number, lon: number, digits = 5): string {
   return `${lat.toFixed(digits)}, ${lon.toFixed(digits)}`;
-}
-
-export function fmtPct(p: number): string {
-  if (p >= 0.995) return "≈ 100 %";
-  if (p < 0.005) return "< 1 %";
-  return `${Math.round(p * 100)} %`;
 }
 
 /** Apparent solar time from hours: "11:42 solar". */

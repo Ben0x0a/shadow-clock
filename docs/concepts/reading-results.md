@@ -8,13 +8,15 @@
   each side of solar noon. They are listed separately and tagged.
 - **No year.** Each year in the range is solved separately; the pattern shifts only by
   minutes from one year to the next.
-- **Windows.** Each day of a solution has a window. The table gives the best-fitting time and
-  the 68 / 95 / 99.7 % spans (Gaussian inputs) or the possible span (range inputs). A ✂ or
-  "cut" tag means a constraint or the search range truncated it.
-- **Probabilities** compare solutions under a uniform prior over the allowed times. They say
-  nothing about whether the measurements themselves are right.
-- **"Even the best time lies outside the 95 % region"** means the shadows disagree with each
-  other or with the place: check the north reference, the tilt, sloping ground, or whether
-  two photos were really taken at the same place.
+- **Declared bounds, not probabilities.** Every listed time fits inside every tolerance you
+  declared (plus the physical terms). All listed periods are equally possible; ShadowClock
+  does not rank them. Narrower tolerances give narrower windows — but only declare what you
+  can defend.
+- **Windows.** Each day of a solution has a window: the possible span and the time closest
+  to the centre of all bounds ("best"). A ✂ or "cut" tag means a constraint or the search
+  range truncated it.
+- **No solution** means the declared bounds are incompatible: check the north reference,
+  the tilt, sloping ground, the tolerances, or whether two photos were really taken at the
+  same place.
 - **Error budget** shows which input dominates the uncertainty, so you know what to measure
   better.

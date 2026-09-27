@@ -2,7 +2,8 @@
  * timeResults.ts — time-mode results: summary, heatmap, solutions list, sky chart and
  * error budget, with a shared selection.
  *
- * Defines: TimeResultsView.
+ * Defines: TimeResultsView (answer card, claim slot, then the evidence: heatmap, list,
+ *          sky chart and error budget).
  * Used by: main.ts.
  * Depends on: core/models.ts, ui/dom.ts, ui/format.ts, ui/results/heatmap.ts,
  *             ui/results/sunpath.ts, ui/results/budget.ts, ui/results/colours.ts.
@@ -11,7 +12,7 @@
 import type { Cluster, DailyWindow, TimeSolveRequest, TimeSolveResult, Zone } from "../../core/models";
 import { zoneLabel } from "../../core/zone";
 import { h, icon, replace } from "../dom";
-import { fmtDate, fmtDateTime, fmtPct, fmtSolar, fmtSpan, fmtTime } from "../format";
+import { fmtDate, fmtDateTime, fmtSolar, fmtSpan, fmtTime } from "../format";
 import { renderBudget } from "./budget";
 import { misfitLevels } from "./colours";
 import { HeatmapView } from "./heatmap";
@@ -65,7 +66,11 @@ export class TimeResultsView {
   private selected: number | null = null;
   private selectedCluster: number | null = null;
 
-  constructor() {
+  /** Groups the detailed views; closed by default in the guided view. */
+  readonly evidence: HTMLDetailsElement;
+
+  /** `claimSlot` hosts the claimed-time check, placed right under the answer. */
+  constructor(claimSlot: HTMLElement) {
     this.heatCard = h(
       "section",
       { class: "card result", "aria-labelledby": "heat-h" },
@@ -75,9 +80,7 @@ export class TimeResultsView {
       h(
         "ul",
         { class: "legend" },
-        h("li", null, h("span", { class: "swatch heat-1" }), "68 %"),
-        h("li", null, h("span", { class: "swatch heat-2" }), "95 %"),
-        h("li", null, h("span", { class: "swatch heat-3" }), "99.7 %"),
+        h("li", null, h("span", { class: "swatch heat-1" }), "possible (inside every declared bound)"),
         h("li", null, h("span", { class: "swatch heat-tail" }), "close, but outside"),
         h("li", null, h("span", { class: "swatch heat-ex" }), "excluded by constraints"),
         h("li", { class: "muted" }, "Drag to zoom · click to inspect · double-click to reset"),
@@ -91,15 +94,20 @@ export class TimeResultsView {
       this.sky,
     );
     this.heat.onSelect = (ms) => this.selectTime(ms, true);
-    this.el = h(
-      "div",
-      { class: "results-stack" },
-      this.summary,
-      this.heatCard,
-      this.list,
-      this.skyCard,
-      h("details", { class: "card result" }, h("summary", null, h("h3", null, "Error budget")), h("p", { class: "hint" }, "Where the uncertainty of each shadow comes from."), this.budget),
+    this.evidence = h(
+      "details",
+      { class: "evidence" },
+      h("summary", { class: "evidence-toggle" }, h("span", null, h("strong", null, "Show the evidence"), h("small", null, "Year map, every day's window, sky check, error budget"))),
+      h(
+        "div",
+        { class: "results-stack" },
+        this.heatCard,
+        this.list,
+        this.skyCard,
+        h("details", { class: "card result" }, h("summary", null, h("h3", null, "Error budget")), h("p", { class: "hint" }, "Where the uncertainty of each shadow comes from."), this.budget),
+      ),
     );
+    this.el = h("div", { class: "results-stack" }, this.summary, claimSlot, this.evidence);
   }
 
   render(res: TimeSolveResult, req: TimeSolveRequest): void {
@@ -109,9 +117,9 @@ export class TimeResultsView {
     const lon = req.site.lon;
     const levels = misfitLevels(res.clusters[0]?.bestFit.dof ?? (res.observations.reduce((a, o) => a + (o.elevation.kind === "gauss" ? 1 : 0) + (o.azimuth?.kind === "gauss" ? 1 : 0), 0)));
 
-    // Keep the selection if it still falls in a solution; otherwise pick the most probable.
+    // Keep the selection if it still falls in a solution; otherwise pick the first one.
     const firstYear = res.clusters.filter((c) => c.year === req.constraints.yearFrom);
-    const best = [...(firstYear.length ? firstYear : res.clusters)].sort((a, b) => b.probability - a.probability)[0];
+    const best = (firstYear.length ? firstYear : res.clusters)[0];
     const keep = this.selected !== null && res.clusters.some((c) => c.windows.some((w) => this.selected! >= w.startMs - 3600e3 && this.selected! <= w.endMs + 3600e3));
     if (!keep) {
       this.selected = best?.bestMs ?? null;
@@ -160,10 +168,8 @@ export class TimeResultsView {
     const zone = req.constraints.zone;
     const lon = req.site.lon;
     const y0 = req.constraints.yearFrom;
-    // Most probable first; near-ties keep chronological (id) order so the list is stable.
-    const yearCl = res.clusters
-      .filter((c) => c.year === y0)
-      .sort((a, b) => (Math.abs(b.probability - a.probability) > 0.01 ? b.probability - a.probability : a.id - b.id));
+    // Chronological: with declared bounds every listed period is equally possible.
+    const yearCl = res.clusters.filter((c) => c.year === y0);
     const years = req.constraints.yearTo - req.constraints.yearFrom + 1;
     const noAz = res.observations.every((o) => !o.azimuth);
     let headline: HTMLElement;
@@ -174,6 +180,7 @@ export class TimeResultsView {
       headline = h(
         "div",
         null,
+        h("p", { class: "eyebrow" }, "Answer"),
         h("p", { class: "headline" }, n === 1 ? "One possible period" : `${n} possible periods`, years > 1 ? " each year" : "", ":"),
         h(
           "ol",
@@ -182,11 +189,11 @@ export class TimeResultsView {
             h(
               "li",
               null,
-              h("button", { type: "button", class: "answer", onclick: () => { this.selectedCluster = c.id; this.selectTime(c.bestMs); this.heat.zoomTo(c); } },
+              h("button", { type: "button", class: "answer", title: "Show this solution in the evidence", onclick: () => { this.evidence.open = true; this.selectedCluster = c.id; this.selectTime(c.bestMs); this.heat.zoomTo(c); this.heatCard.scrollIntoView({ behavior: "smooth", block: "start" }); } },
                 h("span", { class: "num-badge" }, String(c.id + 1)),
                 h("span", { class: "answer-main" }, `${dateRange(c, zone, lon, years === 1)}, ${todRange(c, zone, lon)}`),
                 noAz ? h("span", { class: "tag neutral" }, daySide(c)) : null,
-                h("span", { class: "answer-prob", title: "Relative probability among the solutions (uniform prior over the allowed times)" }, fmtPct(c.probability)),
+                c.truncated ? h("span", { class: "tag", title: "Cut by a constraint or the search range" }, "cut") : null,
               ),
             ),
           ),
@@ -197,7 +204,7 @@ export class TimeResultsView {
     replace(this.summary, 
       h("h3", { id: "sum-h", class: "sr-only" }, "Summary"),
       headline,
-      h("p", { class: "meta" }, `Times in ${zoneLabel(zone)} · ${req.shots.length} shadow${req.shots.length > 1 ? "s" : ""} · computed in ${(res.elapsedMs / 1000).toFixed(2)} s`),
+      h("p", { class: "meta" }, `Times in ${zoneLabel(zone)} · every time inside all declared tolerances · ${req.shots.length} shadow${req.shots.length > 1 ? "s" : ""} · ${(res.elapsedMs / 1000).toFixed(2)} s`),
       warn.length ? h("details", { class: "notes", open: !res.clusters.length }, h("summary", null, `Notes (${warn.length})`), h("ul", null, warn)) : null,
     );
   }
@@ -242,7 +249,6 @@ export class TimeResultsView {
           h("span", { class: "cl-dates" }, dateRange(c, zone, lon)),
           h("span", { class: "cl-tod" }, todRange(c, zone, lon)),
           noAz ? h("span", { class: "tag neutral" }, daySide(c)) : null,
-          h("span", { class: "cl-prob" }, h("span", { class: "prob-bar", style: { width: `${Math.max(3, c.probability * 100)}%` } }), fmtPct(c.probability)),
           c.truncated ? h("span", { class: "tag", title: "Cut by a constraint or the search range" }, "cut") : null,
         ),
         h(
@@ -320,7 +326,7 @@ export class TimeResultsView {
 }
 
 function clusterText(c: Cluster, zone: Zone, lon: number, levels: boolean): string {
-  const lines = [`Solution ${c.id + 1}: ${dateRange(c, zone, lon)}, ${todRange(c, zone, lon)} (${zoneLabel(zone)}), probability ${fmtPct(c.probability)}`];
+  const lines = [`Solution ${c.id + 1}: ${dateRange(c, zone, lon)}, ${todRange(c, zone, lon)} (${zoneLabel(zone)})`];
   for (const w of c.windows) {
     lines.push(
       [fmtDate(w.bestMs, zone, lon), `best ${fmtTime(w.bestMs, zone, lon, true)}`, levels ? `95% ${span(w, 0.9545, zone, lon)}` : "", `${levels ? "99.7%" : "possible"} ${fmtTime(w.startMs, zone, lon, true)}–${fmtTime(w.endMs, zone, lon, true)}`]

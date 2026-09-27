@@ -12,8 +12,10 @@ browser, and nothing you enter leaves your machine.
   time of day, time zone, absolute bounds) and check a claimed EXIF time, with or without its
   UTC offset.
 - **Find the place**: shadows with their UTC times; the bands of possible places are crossed.
-- NREL SPA solar positions, full error propagation (penumbra, tilt, refraction, location and
-  time uncertainty), 68 / 95 / 99.7 % regions, reproducible JSON reports.
+- Every measurement is a value ± a tolerance declared by the operator, treated as a hard
+  bound; physical terms (penumbra, tilt, refraction) and the place/time tolerances are
+  propagated as bounds too. NREL SPA solar positions, reproducible JSON reports.
+- A guided step-by-step flow, with an Expert view that shows every option at once.
 
 ## Quick start
 

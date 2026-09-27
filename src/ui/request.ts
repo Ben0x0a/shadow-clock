@@ -50,37 +50,42 @@ class Collector {
   }
 }
 
-function uncertain(c: Collector, sh: ShotState, base: string, what: string, err: "gauss" | "range"): Uncertain {
-  const f = sh.f;
-  if (err === "gauss") {
-    return {
-      kind: "gauss",
-      value: c.num(`${sh.id}.${base}`, f[base], what),
-      sigma: c.num(`${sh.id}.${base}s`, f[`${base}s`], `${what} uncertainty`, { empty: 0, min: 0 }),
-    };
+/** Parses a declared tolerance (≥ 0). An empty tolerance is an error, never a silent 0. */
+function tolerance(c: Collector, key: string, text: string, what: string): number {
+  if (!text.trim()) {
+    c.add(key, `${what}: declare the tolerance (0 if exact)`);
+    return NaN;
   }
-  return {
-    kind: "range",
-    min: c.num(`${sh.id}.${base}min`, f[`${base}min`], `${what} minimum`),
-    max: c.num(`${sh.id}.${base}max`, f[`${base}max`], `${what} maximum`),
-  };
+  return c.num(key, text, `${what} tolerance`, { min: 0 });
+}
+
+/**
+ * "value ± declared tolerance" as a hard bound. WHY bounds only: the operator declares
+ * how far off a measurement can be; no statistical distribution is assumed.
+ */
+function bounded(c: Collector, sh: ShotState, base: string, what: string, positive: boolean): Uncertain {
+  const v = c.num(`${sh.id}.${base}`, sh.f[base], what);
+  const t = tolerance(c, `${sh.id}.${base}t`, sh.f[`${base}t`], what);
+  if (positive && Number.isFinite(v) && Number.isFinite(t) && v - t <= 0) {
+    c.add(`${sh.id}.${base}t`, `${what}: the tolerance must be smaller than the value`);
+  }
+  return { kind: "range", min: v - t, max: v + t };
 }
 
 export function buildShadow(c: Collector, sh: ShotState): ShadowInput {
   const elevation: ShadowInput["elevation"] =
     sh.method === "lengths"
-      ? { method: "lengths", height: uncertain(c, sh, "h", "Object height", sh.err), shadow: uncertain(c, sh, "l", "Shadow length", sh.err) }
+      ? { method: "lengths", height: bounded(c, sh, "h", "Object height", true), shadow: bounded(c, sh, "l", "Shadow length", true) }
       : sh.method === "ratio"
-        ? { method: "ratio", ratio: uncertain(c, sh, "r", "Ratio", sh.err) }
-        : { method: "angle", angle: uncertain(c, sh, "a", "Elevation", sh.err) };
+        ? { method: "ratio", ratio: bounded(c, sh, "r", "Ratio", true) }
+        : { method: "angle", angle: bounded(c, sh, "a", "Elevation", true) };
   let azimuth: ShadowInput["azimuth"] = null;
-  if (sh.azOn) {
-    const shadow: Uncertain =
-      sh.azErr === "gauss"
-        ? { kind: "gauss", value: c.num(`${sh.id}.az`, sh.az, "Azimuth"), sigma: c.num(`${sh.id}.azs`, sh.azs, "Azimuth uncertainty", { empty: 0, min: 0 }) }
-        : { kind: "range", min: c.num(`${sh.id}.azmin`, sh.azmin, "Azimuth minimum"), max: c.num(`${sh.id}.azmax`, sh.azmax, "Azimuth maximum") };
+  // WHY: an empty direction means "unknown", not an error — it is an optional measurement.
+  if (sh.azOn && sh.az.trim()) {
+    const v = c.num(`${sh.id}.az`, sh.az, "Direction");
+    const t = tolerance(c, `${sh.id}.azt`, sh.azt, "Direction");
     azimuth = {
-      shadow,
+      shadow: { kind: "range", min: v - t, max: v + t },
       reference: sh.azRef,
       declinationDeg: sh.azRef === "magnetic" ? c.num(`${sh.id}.decl`, sh.decl, "Declination", { empty: 0 }) : 0,
     };
@@ -160,8 +165,8 @@ function timeShots(c: Collector, s: AppState): Shot[] {
       const o = parseDuration(sh.offset);
       if (o === null) c.add(`${sh.id}.offset`, "Time after shadow 1, e.g. +01:23:04 or 85 min");
       offsetS = o ?? 0;
-      const sg = sh.offsetSigma.trim() ? parseDuration(sh.offsetSigma) : 0;
-      if (sg === null || sg < 0) c.add(`${sh.id}.offsetSigma`, "Uncertainty, e.g. 5 s or 2 min");
+      const sg = sh.offsetTol.trim() ? parseDuration(sh.offsetTol) : null;
+      if (sg === null || sg < 0) c.add(`${sh.id}.offsetTol`, "Declare the tolerance of the time gap, e.g. 2 s");
       sigma = Math.abs(sg ?? 0);
     }
     return { id: sh.id, label: sh.label, shadow, offsetS, timeMs: NaN, timeSigmaS: sigma };
@@ -207,8 +212,8 @@ export function buildPlaceRequest(s: AppState): Built<LocationSolveRequest> {
       if (off === null) c.add(`${sh.id}.timeOffset`, "Offset not recognised (e.g. +02:00)");
       timeMs = p.wallMs - (off ?? 0) * 60_000;
     }
-    const sg = sh.timeSigma.trim() ? parseDuration(sh.timeSigma) : 0;
-    if (sg === null || sg < 0) c.add(`${sh.id}.timeSigma`, "Uncertainty, e.g. 30 s or 2 min");
+    const sg = sh.timeTol.trim() ? parseDuration(sh.timeTol) : null;
+    if (sg === null || sg < 0) c.add(`${sh.id}.timeTol`, "Declare the time tolerance, e.g. 30 s or 2 min");
     return { id: sh.id, label: sh.label, shadow, offsetS: 0, timeMs, timeSigmaS: Math.abs(sg ?? 0) };
   });
   let bounds: LocationSolveRequest["bounds"] = null;

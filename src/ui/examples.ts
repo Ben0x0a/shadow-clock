@@ -23,21 +23,21 @@ function sunAt(ms: number, lat: number, lon: number) {
 
 const r = (v: number, d: number) => v.toFixed(d);
 
-function lengthsShot(i: number, ms: number, lat: number, lon: number, H: number, sH: number, sL: number, sAz: number | null): ShotState {
+/** Tolerances tH, tL, tAz are the operator-declared maximum errors (hard bounds). */
+function lengthsShot(i: number, ms: number, lat: number, lon: number, H: number, tH: number, tL: number, tAz: number | null): ShotState {
   const s = sunAt(ms, lat, lon);
   const L = H / Math.tan((s.elevation * Math.PI) / 180);
   const sh = newShot(i);
   sh.method = "lengths";
-  sh.err = "gauss";
   sh.f.h = r(H, 2);
-  sh.f.hs = r(sH, 2);
+  sh.f.ht = r(tH, 2);
   sh.f.l = r(L, 2);
-  sh.f.ls = r(sL, 2);
+  sh.f.lt = r(tL, 2);
   sh.tip = "midpoint";
   sh.tilt = "0.5";
-  sh.azOn = sAz !== null;
-  sh.az = r((s.azimuth + 180) % 360, 1);
-  sh.azs = sAz !== null ? r(sAz, 1) : "";
+  sh.azOn = tAz !== null;
+  sh.az = tAz !== null ? r((s.azimuth + 180) % 360, 1) : "";
+  sh.azt = tAz !== null ? r(tAz, 1) : "";
   return sh;
 }
 
@@ -59,9 +59,9 @@ export const EXAMPLES: Example[] = [
       s.cons.yearFrom = s.cons.yearTo = "2025";
       s.cons.zoneKind = "iana";
       s.cons.zoneValue = "Europe/Paris";
-      const a = lengthsShot(0, ms, lat, lon, 1.2, 0.01, 0.02, 2);
+      const a = lengthsShot(0, ms, lat, lon, 1.2, 0.02, 0.04, 4);
       a.label = "Bollard";
-      const b = lengthsShot(1, ms, lat, lon, 5.4, 0.05, 0.08, 1.5);
+      const b = lengthsShot(1, ms, lat, lon, 5.4, 0.1, 0.16, 3);
       b.label = "Lamp standard";
       b.relation = "same";
       s.shots = [a, b];
@@ -79,13 +79,13 @@ export const EXAMPLES: Example[] = [
       s.cons.yearFrom = s.cons.yearTo = "2024";
       s.cons.zoneKind = "iana";
       s.cons.zoneValue = "Australia/Sydney";
-      const a = lengthsShot(0, ms, lat, lon, 1.8, 0.02, 0.03, 2);
+      const a = lengthsShot(0, ms, lat, lon, 1.8, 0.04, 0.06, 4);
       a.label = "Photo 1 – fence post";
-      const b = lengthsShot(1, ms + 8100e3, lat, lon, 1.8, 0.02, 0.03, 2);
+      const b = lengthsShot(1, ms + 8100e3, lat, lon, 1.8, 0.04, 0.06, 4);
       b.label = "Photo 2 – same post";
       b.relation = "other";
       b.offset = "+02:15:00";
-      b.offsetSigma = "2 s";
+      b.offsetTol = "2 s";
       s.shots = [a, b];
       return s;
     },
@@ -105,9 +105,8 @@ export const EXAMPLES: Example[] = [
       const a = newShot(0);
       a.label = "Building";
       a.method = "ratio";
-      a.err = "range";
-      a.f.rmin = r(ratio * 0.97, 3);
-      a.f.rmax = r(ratio * 1.03, 3);
+      a.f.r = r(ratio, 3);
+      a.f.rt = r(ratio * 0.03, 3);
       a.azOn = false;
       a.tip = "unknown";
       s.shots = [a];
@@ -123,12 +122,12 @@ export const EXAMPLES: Example[] = [
       const s = defaultState();
       s.mode = "place";
       s.shots = times.map((ms, i) => {
-        const sh = lengthsShot(i, ms, lat, lon, 2, 0.01, 0.02, null);
+        const sh = lengthsShot(i, ms, lat, lon, 2, 0.02, 0.04, null);
         sh.label = `Photo ${i + 1}`;
         const d = new Date(ms);
         sh.time = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:00`;
         sh.timeOffset = "+00:00";
-        sh.timeSigma = "30 s";
+        sh.timeTol = "30 s";
         return sh;
       });
       return s;
