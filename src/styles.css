@@ -493,16 +493,8 @@ progress {
   .switch.compact span {
     font-size: 12px;
   }
-  .actions {
-    gap: 0;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
   .actions .btn.icon-only {
-    width: 34px;
-  }
-  .brand {
-    flex: 1;
+    width: 40px;
   }
   .layout {
     padding: 12px 16px;
@@ -1150,7 +1142,7 @@ fieldset.group legend {
   display: block;
   width: 100%;
   cursor: crosshair;
-  touch-action: none;
+  touch-action: pan-y;
 }
 .tooltip {
   position: absolute;
@@ -1658,6 +1650,164 @@ details.more[open] > summary {
 }
 .evidence[open] > summary {
   margin-bottom: 16px;
+}
+
+/* ---- Info buttons (native popover) ---------------------------------------------------- */
+.label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.label-row > label,
+.label-row > .field-label,
+.label-row > .section-intro {
+  margin: 0;
+}
+.info {
+  display: inline-flex;
+  flex: none;
+}
+.info-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-muted);
+  background: transparent;
+  color: var(--text-muted);
+  font: italic 700 11px/1 Georgia, "Times New Roman", serif;
+  cursor: pointer;
+  position: relative;
+}
+/* Invisible enlargement: a comfortable touch target without a bigger icon. */
+.info-btn::after {
+  content: "";
+  position: absolute;
+  inset: -11px;
+}
+.info-btn:hover,
+.info-btn:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.info-pop {
+  max-width: min(360px, calc(100vw - 32px));
+  margin: auto;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-primary);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.info-pop::backdrop {
+  background: rgba(0, 0, 0, 0.25);
+}
+.info-pop strong {
+  display: block;
+  margin-bottom: 6px;
+}
+.info-pop p {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+}
+.info-pop .btn {
+  margin-top: 4px;
+}
+legend .info {
+  vertical-align: -3px;
+}
+
+.shot-flat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.shot-flat > .preview {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.map-consent {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+/* ---- Touch & small screens ------------------------------------------------------------ */
+@media (pointer: coarse) {
+  details > summary {
+    min-height: 40px;
+  }
+  .seg label {
+    padding: 8px 14px;
+  }
+  .chip-btn,
+  .chip span {
+    padding: 8px 14px;
+  }
+  .btn {
+    min-height: 44px;
+  }
+  .btn.small {
+    min-height: 38px;
+  }
+  .gstep-head {
+    min-height: 56px;
+  }
+}
+@media (max-width: 980px) {
+  /* The sticky bar would eat a third of a phone screen. */
+  .topbar {
+    position: static;
+  }
+  /* 16 px stops iOS Safari from zooming in when an input gets focus. */
+  input,
+  select {
+    font-size: 16px !important;
+  }
+}
+@media (max-width: 520px) {
+  /* Top bar: brand on its own row, then the actions spread across, then the mode. */
+  .brand {
+    flex: 1 1 100%;
+  }
+  .actions {
+    flex: 1 1 100%;
+    justify-content: space-between;
+    margin-left: 0;
+  }
+  .gstep-title .opt {
+    display: none;
+  }
+  .compass {
+    width: 56px;
+    height: 56px;
+  }
+  .pair {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+  .card.result,
+  .panel {
+    padding: 12px;
+  }
+  .gstep-actions .btn {
+    width: 100%;
+  }
+  .summary .headline {
+    font-size: 16px;
+  }
+  .answer {
+    font-size: 14px;
+  }
 }
 
 /* ---- Toast & dialog ------------------------------------------------------------------ */

@@ -11,7 +11,7 @@
 import { checkClaim } from "../../core/claimCheck";
 import type { ClaimOffsetResult, TimeSolveResult, Zone } from "../../core/models";
 import { formatOffset } from "../../core/zone";
-import { field, h, icon } from "../dom";
+import { field, h, icon, info } from "../dom";
 import { fmtDateTime, fmtSpan } from "../format";
 import { buildClaimRequest } from "../request";
 import type { Store } from "../state";
@@ -22,12 +22,12 @@ export function renderClaim(root: HTMLElement, store: Store, invalid: Set<string
   const s = store.state;
   output = h("div", { class: "claim-out", "aria-live": "polite" });
   root.replaceChildren(
-    h("p", { class: "section-intro" }, "Paste the timestamp that the photo claims (EXIF DateTimeOriginal, a post date, a witness statement). ShadowClock tells you whether the shadows agree."),
     h(
       "div",
       { class: "row" },
       field({
-        label: "Claimed date & time",
+        label: "Claimed time",
+        info: "The time the photo claims: EXIF DateTimeOriginal (2024:07:14 15:32:10), a post date, a witness statement.",
         value: s.claim.time,
         name: "claim.time",
         invalid: invalid.has("claim.time"),
@@ -46,7 +46,7 @@ export function renderClaim(root: HTMLElement, store: Store, invalid: Set<string
         invalid: invalid.has("claim.offset"),
         inputmode: "text",
         placeholder: "unknown",
-        hint: "Leave empty to test every offset",
+        info: "Leave empty if the offset is unknown (EXIF often has none): every offset from UTC−12 to UTC+14 is tested, and the compatible ones are listed.",
         onInput: (v) => {
           store.update((st) => (st.claim.offset = v));
           onChange();
@@ -145,11 +145,15 @@ export function updateClaim(store: Store, zone: Zone, lon: number, timeResult: T
         null,
         h("strong", null, ok.length ? `Compatible if the clock was on UTC${formatOffset(best!.offsetMin)}` : "No UTC offset makes this time compatible"),
         h(
-          "p",
-          null,
-          ok.length
-            ? `Compatible offsets: ${ranges(ok.map((x) => x.offsetMin))}. The time zone at the place during that season should be one of these — otherwise the camera clock or the claim is wrong.`
-            : "Either the date or the measurements are wrong. The solutions list shows the compatible dates.",
+          "div",
+          { class: "label-row" },
+          h("p", null, ok.length ? `Compatible: ${ranges(ok.map((x) => x.offsetMin))}` : "The date, the clock or the measurements are wrong."),
+          info(
+            "Reading this",
+            ok.length
+              ? "These are the UTC offsets that make the claimed clock time agree with the shadows. The legal time zone of the place in that season should be one of them; if it is not, the camera clock or the claim is wrong."
+              : "No UTC offset makes the claimed time agree with the shadows. The answer above lists the times that do.",
+          ),
         ),
       ),
     ),

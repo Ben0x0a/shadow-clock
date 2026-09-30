@@ -1,7 +1,8 @@
 /**
  * dom.ts — minimal DOM construction helpers (no framework).
  *
- * Defines: h() element builder, segmented() radio group, field() labelled input, svg().
+ * Defines: h() element builder, segmented() radio group, field() labelled input, svg(),
+ *          info() "i" button with a popover explanation.
  * Used by: every module under ui/.
  * Depends on: nothing.
  *
@@ -99,6 +100,8 @@ export interface FieldOpts {
   name?: string;
   autocomplete?: string;
   type?: string;
+  /** Longer explanation behind an "i" button next to the label. */
+  info?: string;
 }
 
 /** A labelled text input with optional unit suffix and hint. */
@@ -122,9 +125,30 @@ export function field(o: FieldOpts): HTMLElement {
   return h(
     "div",
     { class: `field${o.wide ? " wide" : ""}` },
-    h("label", { for: id }, o.label),
+    o.info ? h("div", { class: "label-row" }, h("label", { for: id }, o.label), info(o.label, o.info)) : h("label", { for: id }, o.label),
     h("div", { class: "input-wrap" }, input, o.suffix ? h("span", { class: "suffix", "aria-hidden": "true" }, o.suffix) : null),
     o.hint ? h("small", { id: hintId, class: "hint" }, o.hint) : null,
+  );
+}
+
+/**
+ * A small "i" button that opens a short explanation. Uses the native Popover API, so
+ * light-dismiss, Escape, focus return and top-layer stacking come from the browser.
+ * WHY: keeps the forms short; details are one tap away instead of always on screen.
+ */
+export function info(title: string, ...content: (string | Node)[]): HTMLElement {
+  const id = nextId("pop");
+  return h(
+    "span",
+    { class: "info" },
+    h("button", { type: "button", class: "info-btn", popovertarget: id, "aria-label": `More about ${title}`, title: "More information" }, "i"),
+    h(
+      "div",
+      { id, popover: "auto", class: "info-pop", role: "note" },
+      h("strong", null, title),
+      ...content.map((c) => (typeof c === "string" ? h("p", null, c) : c)),
+      h("button", { type: "button", class: "btn small", popovertarget: id, popovertargetaction: "hide" }, "Got it"),
+    ),
   );
 }
 

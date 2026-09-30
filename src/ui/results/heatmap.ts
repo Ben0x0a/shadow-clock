@@ -179,6 +179,21 @@ export class HeatmapView {
 
     const X = (day: number) => PAD.l + ((day - v.d0) / (v.d1 - v.d0)) * g.pw;
     const Y = (slot: number) => PAD.t + ((slot - v.s0) / (v.s1 - v.s0)) * g.ph;
+
+    // Possible cells again, at least 2 px each: a whole year squeezed onto a phone would
+    // otherwise shrink a few-minute window below one pixel and make it disappear.
+    const cw = g.pw / (v.d1 - v.d0);
+    const ch = g.ph / (v.s1 - v.s0);
+    if (cw < 2 || ch < 2) {
+      ctx.fillStyle = cssVar("--heat-1");
+      for (let day = Math.floor(v.d0); day < Math.ceil(v.d1); day++) {
+        for (let sl = Math.floor(v.s0); sl < Math.ceil(v.s1); sl++) {
+          const val = d.values[day * d.slots + sl];
+          if (!(val <= this.levels.l997)) continue;
+          ctx.fillRect(X(day), Y(sl), Math.max(2, cw), Math.max(2, ch));
+        }
+      }
+    }
     const muted = cssVar("--text-muted");
     const grid = cssVar("--grid");
     ctx.font = "11px system-ui, sans-serif";
@@ -239,8 +254,16 @@ export class HeatmapView {
       const x = X(Math.floor(day) + 0.5);
       const y = Y(slot);
       if (x < PAD.l || x > PAD.l + g.pw || y < PAD.t || y > PAD.t + g.ph) continue;
+      // Label above the solution with a short stem, so it never hides the data itself.
+      const ly = y - 16 < PAD.t + 8 ? y + 16 : y - 16;
+      ctx.strokeStyle = cssVar("--text-primary");
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(x, y, 7, 0, Math.PI * 2);
+      ctx.moveTo(x, y + (ly < y ? -3 : 3));
+      ctx.lineTo(x, ly + (ly < y ? 7 : -7));
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x, ly, 7, 0, Math.PI * 2);
       ctx.fillStyle = cssVar("--chart-surface");
       ctx.fill();
       ctx.lineWidth = 2;
@@ -249,7 +272,7 @@ export class HeatmapView {
       ctx.fillStyle = cssVar("--text-primary");
       ctx.font = "600 10px system-ui, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(String(c.id + 1), x, y + 0.5);
+      ctx.fillText(String(c.id + 1), x, ly + 0.5);
       ctx.textAlign = "left";
       ctx.font = "11px system-ui, sans-serif";
     }
@@ -347,14 +370,37 @@ export class HeatmapView {
       this.tooltip.hidden = true;
       this.draw();
     });
+    // Touch: a tap selects; swipes are left to the page (CSS touch-action: pan-y), so
+    // the chart never traps scrolling on a phone. Drag-to-zoom is mouse/pen only.
+    let tap: { x: number; y: number } | null = null;
     c.addEventListener("pointerdown", (e) => {
       if (!this.data) return;
       const p = pos(e);
       if (!this.toData(p.x, p.y)) return;
+      if (e.pointerType === "touch") {
+        tap = p;
+        return;
+      }
       c.setPointerCapture(e.pointerId);
       this.drag = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
     });
+    c.addEventListener("pointercancel", () => (tap = null));
     c.addEventListener("pointerup", (e) => {
+      if (e.pointerType === "touch") {
+        const p = pos(e);
+        const t = tap;
+        tap = null;
+        if (!t || Math.hypot(p.x - t.x, p.y - t.y) > 10) return;
+        const dp = this.toData(p.x, p.y);
+        if (!dp) return;
+        this.tooltip.hidden = false;
+        this.tooltip.textContent = this.describe(dp.day, dp.slot);
+        this.tooltip.style.left = `${Math.max(0, Math.min(p.x - 110, this.el.clientWidth - 240))}px`;
+        this.tooltip.style.top = `${p.y + 18}px`;
+        window.setTimeout(() => (this.tooltip.hidden = true), 2500);
+        this.onSelect(this.msAt(dp.day, Math.floor(dp.slot) + 0.5));
+        return;
+      }
       const dr = this.drag;
       this.drag = null;
       if (!dr || !this.data) return;

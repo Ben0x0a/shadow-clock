@@ -166,9 +166,9 @@ export function renderSunPath(host: HTMLElement, x: SunPathInput): void {
   const legend = h(
     "ul",
     { class: "legend" },
-    h("li", null, h("span", { class: "swatch line" }), `Sun path on ${fmtDate(x.selectedMs, x.zone, lon)} (hour marks in the display zone)`),
+    h("li", null, h("span", { class: "swatch line" }), `Sun path, ${fmtDate(x.selectedMs, x.zone, lon)}`),
     x.labels.map((l, i) =>
-      h("li", null, h("span", { class: "swatch", style: { background: shotColour(i) } }), `${l}: measured Sun with its declared bounds; dot = Sun at the selected time`),
+      h("li", null, h("span", { class: "swatch", style: { background: shotColour(i) } }), l),
     ),
   );
   host.replaceChildren(root, legend);

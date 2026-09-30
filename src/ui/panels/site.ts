@@ -8,7 +8,7 @@
  */
 
 import { parseLocation } from "../../core/parse";
-import { field, h, segmented, replace } from "../dom";
+import { field, h, info, replace, segmented } from "../dom";
 import { fmtLatLon } from "../format";
 import { mountSiteMap, type SiteMap } from "../map";
 import { parseNumber } from "../request";
@@ -38,7 +38,7 @@ export function renderSite(root: HTMLElement, store: Store, invalid: Set<string>
   const status = h("small", { class: "hint", "aria-live": "polite" });
   const showStatus = () => {
     const ll = parseLocation(store.state.site.loc);
-    status.textContent = ll ? `✓ ${fmtLatLon(ll.lat, ll.lon)}` : store.state.site.loc.trim() ? "Not recognised yet — try 48.8584, 2.2945 or a map link" : "Decimal, DMS (48°51′30″N 2°17′40″E), or a Google Maps / OpenStreetMap link";
+    status.textContent = ll ? `✓ ${fmtLatLon(ll.lat, ll.lon)}` : store.state.site.loc.trim() ? "Not recognised yet" : "";
     status.classList.toggle("ok", !!ll);
     if (ll) siteMap?.set(ll.lat, ll.lon, radiusM(store.state));
   };
@@ -50,7 +50,8 @@ export function renderSite(root: HTMLElement, store: Store, invalid: Set<string>
     invalid: invalid.has("site.loc"),
     inputmode: "text",
     wide: true,
-    placeholder: "48.8584, 2.2945",
+    placeholder: "48.8584, 2.2945 or a map link",
+    info: "Paste coordinates in any usual form: decimal (48.8584, 2.2945), degrees-minutes-seconds (48°51′30″N 2°17′40″E), or a Google Maps / OpenStreetMap link. You can also click the map once it is loaded.",
     onInput: (v) => {
       store.update((st) => (st.site.loc = v));
       showStatus();
@@ -73,7 +74,7 @@ export function renderSite(root: HTMLElement, store: Store, invalid: Set<string>
   const chips = h(
     "div",
     { class: "stack tight" },
-    h("span", { class: "field-label" }, "How precisely do you know the place?"),
+    h("div", { class: "label-row" }, h("span", { class: "field-label" }, "Known to within"), info("Place precision", "The photo was taken somewhere within this distance of the coordinates. It is a hard bound: ShadowClock checks every position inside it.", "Exact spot = 10 m · Street = 100 m · Town = 5 km · Region = 50 km.")),
     h(
       "div",
       { class: "chips", role: "group", "aria-label": "Place precision" },
@@ -104,7 +105,7 @@ export function renderSite(root: HTMLElement, store: Store, invalid: Set<string>
       h(
         "div",
         { class: "field" },
-        h("label", { for: "radius-in" }, "Position known to within"),
+        h("label", { for: "radius-in" }, "Radius"),
         h(
           "div",
           { class: "input-wrap joined" },
@@ -133,7 +134,6 @@ export function renderSite(root: HTMLElement, store: Store, invalid: Set<string>
             h("option", { value: "km", selected: s.site.radiusUnit === "km" }, "km"),
           ),
         ),
-        h("small", { class: "hint" }, "Radius of the area the photo could have been taken in. Propagated into the result."),
       ),
     ),
     mapHost,
@@ -144,7 +144,7 @@ export function renderSite(root: HTMLElement, store: Store, invalid: Set<string>
 export function renderSearchArea(root: HTMLElement, store: Store, invalid: Set<string>): void {
   const s = store.state;
   replace(root, 
-    h("p", { class: "section-intro" }, "Restrict the search if you already know the country or region — it speeds things up and removes far-away look-alikes."),
+    h("div", { class: "label-row" }, h("span", { class: "field-label" }, "Search"), info("Search area", "If you already know the country or region, restrict the search to a box: it is faster and removes far-away look-alikes.")),
     segmented("area", "Search area", [
       { value: "world", label: "Whole Earth" },
       { value: "bbox", label: "Bounding box" },

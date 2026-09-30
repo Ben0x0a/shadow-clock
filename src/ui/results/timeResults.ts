@@ -11,7 +11,7 @@
 
 import type { Cluster, DailyWindow, TimeSolveRequest, TimeSolveResult, Zone } from "../../core/models";
 import { zoneLabel } from "../../core/zone";
-import { h, icon, replace } from "../dom";
+import { h, icon, info, replace } from "../dom";
 import { fmtDate, fmtDateTime, fmtSolar, fmtSpan, fmtTime } from "../format";
 import { renderBudget } from "./budget";
 import { misfitLevels } from "./colours";
@@ -74,37 +74,40 @@ export class TimeResultsView {
     this.heatCard = h(
       "section",
       { class: "card result", "aria-labelledby": "heat-h" },
-      h("div", { class: "card-head" }, h("h3", { id: "heat-h" }, "The year at a glance"), this.heat.resetButton),
+      h(
+        "div",
+        { class: "card-head" },
+        h("div", { class: "label-row" }, h("h3", { id: "heat-h" }, "The year at a glance"), info("Year map", "Each column is a day, each row a time of day. Blue marks the possible times; numbers match the answers.", "Tap or click a spot to check it in the sky view. On a computer, drag to zoom and double-click to reset.")),
+        this.heat.resetButton,
+      ),
       h("p", { class: "hint heat-caption" }),
       this.heat.el,
       h(
         "ul",
         { class: "legend" },
-        h("li", null, h("span", { class: "swatch heat-1" }), "possible (inside every declared bound)"),
+        h("li", null, h("span", { class: "swatch heat-1" }), "possible"),
         h("li", null, h("span", { class: "swatch heat-tail" }), "close, but outside"),
-        h("li", null, h("span", { class: "swatch heat-ex" }), "excluded by constraints"),
-        h("li", { class: "muted" }, "Drag to zoom · click to inspect · double-click to reset"),
+        h("li", null, h("span", { class: "swatch heat-ex" }), "excluded"),
       ),
     );
     this.skyCard = h(
       "section",
       { class: "card result", "aria-labelledby": "sky-h" },
-      h("div", { class: "card-head" }, h("h3", { id: "sky-h" }, "Sky check")),
-      h("p", { class: "hint" }, "The Sun's path on the selected day compared with what each shadow measured."),
+      h("div", { class: "card-head" }, h("div", { class: "label-row" }, h("h3", { id: "sky-h" }, "Sky check"), info("Sky check", "The Sun's path across the sky on the selected day, compared with the Sun position each shadow implies (boxes = your declared bounds). A good time passes through every box."))),
       this.sky,
     );
     this.heat.onSelect = (ms) => this.selectTime(ms, true);
     this.evidence = h(
       "details",
       { class: "evidence" },
-      h("summary", { class: "evidence-toggle" }, h("span", null, h("strong", null, "Show the evidence"), h("small", null, "Year map, every day's window, sky check, error budget"))),
+      h("summary", { class: "evidence-toggle" }, h("span", null, h("strong", null, "Show the evidence"), h("small", null, "Year map, daily windows, sky check"))),
       h(
         "div",
         { class: "results-stack" },
         this.heatCard,
         this.list,
         this.skyCard,
-        h("details", { class: "card result" }, h("summary", null, h("h3", null, "Error budget")), h("p", { class: "hint" }, "Where the uncertainty of each shadow comes from."), this.budget),
+        h("details", { class: "card result" }, h("summary", null, h("h3", null, "Error budget")), this.budget),
       ),
     );
     this.el = h("div", { class: "results-stack" }, this.summary, claimSlot, this.evidence);
@@ -129,7 +132,7 @@ export class TimeResultsView {
     this.renderSummary(res, req);
     if (res.heatmap) {
       (this.heatCard.querySelector(".heat-caption") as HTMLElement).textContent =
-        `${res.heatmap.year}, in ${zoneLabel(zone)}. Every column is a day, every row a time of day. The same pattern repeats each year.`;
+        `${res.heatmap.year} · ${zoneLabel(zone)}`;
       this.heat.render(res.heatmap, res.clusters, levels, zone, lon);
       this.heat.select(this.selected);
     }
@@ -180,7 +183,7 @@ export class TimeResultsView {
       headline = h(
         "div",
         null,
-        h("p", { class: "eyebrow" }, "Answer"),
+        h("div", { class: "label-row" }, h("p", { class: "eyebrow" }, "Answer"), info("How to read this", "Every listed time fits inside all the tolerances you declared, plus the physical margins (blurred shadow tip, lean, refraction). The periods are equally possible: nothing is ranked.", "The Sun repeats the same path on two dates each year, and every year: that is why several periods appear.")),
         h("p", { class: "headline" }, n === 1 ? "One possible period" : `${n} possible periods`, years > 1 ? " each year" : "", ":"),
         h(
           "ol",
@@ -204,7 +207,7 @@ export class TimeResultsView {
     replace(this.summary, 
       h("h3", { id: "sum-h", class: "sr-only" }, "Summary"),
       headline,
-      h("p", { class: "meta" }, `Times in ${zoneLabel(zone)} · every time inside all declared tolerances · ${req.shots.length} shadow${req.shots.length > 1 ? "s" : ""} · ${(res.elapsedMs / 1000).toFixed(2)} s`),
+      h("p", { class: "meta" }, `Times in ${zoneLabel(zone)} · ${req.shots.length} shadow${req.shots.length > 1 ? "s" : ""}`),
       warn.length ? h("details", { class: "notes", open: !res.clusters.length }, h("summary", null, `Notes (${warn.length})`), h("ul", null, warn)) : null,
     );
   }
@@ -320,7 +323,9 @@ export class TimeResultsView {
       selectedMs: this.selected,
       zone: req.constraints.zone,
     });
-    const cap = h("p", { class: "meta" }, `Selected: ${fmtDateTime(this.selected, req.constraints.zone, req.site.lon)} · ${fmtDateTime(this.selected, { kind: "utc" }, 0)}`);
+    const local = fmtDateTime(this.selected, req.constraints.zone, req.site.lon);
+    const utc = fmtDateTime(this.selected, { kind: "utc" }, 0);
+    const cap = h("p", { class: "meta" }, `Selected: ${local}${req.constraints.zone.kind === "utc" ? "" : ` · ${utc}`}`);
     this.sky.prepend(cap);
   }
 }

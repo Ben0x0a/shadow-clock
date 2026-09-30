@@ -9,7 +9,7 @@
  */
 
 import type { GeoCell, GeoRegion, LocationSolveRequest, LocationSolveResult } from "../../core/models";
-import { h, icon, replace } from "../dom";
+import { h, icon, info, replace } from "../dom";
 import { fmtLatLon } from "../format";
 import { mountResultMap, onTilesChange, type ResultMap, setTilesEnabled, tilesEnabled } from "../map";
 import { renderBudget } from "./budget";
@@ -110,7 +110,7 @@ export class PlaceResultsView {
     this.evidence = h(
       "details",
       { class: "evidence" },
-      h("summary", { class: "evidence-toggle" }, h("span", null, h("strong", null, "Show the evidence"), h("small", null, "Every candidate area, error budget"))),
+      h("summary", { class: "evidence-toggle" }, h("span", null, h("strong", null, "Show the evidence"), h("small", null, "All areas, error budget"))),
       h("div", { class: "results-stack" }, this.list, h("details", { class: "card result" }, h("summary", null, h("h3", null, "Error budget")), this.budget)),
     );
     this.el = h(
@@ -134,7 +134,7 @@ export class PlaceResultsView {
       this.map = null;
       replace(this.mapHost, 
         offlinePlot(res.cells, res.regions, this.palette()),
-        h("p", { class: "hint" }, "Offline plot (no map tiles loaded). ", h("button", { type: "button", class: "link", onclick: () => setTilesEnabled(true) }, "Load the OpenStreetMap basemap"), " — this reveals the viewed area to the tile server."),
+        h("div", { class: "label-row" }, h("button", { type: "button", class: "link", onclick: () => setTilesEnabled(true) }, "Show on a real map"), info("Map privacy", "The plot above uses no map data. A real map loads tiles from OpenStreetMap, which tells the tile server which area you are looking at.")),
       );
       return;
     }
@@ -167,7 +167,7 @@ export class PlaceResultsView {
             )),
           ))
         : null,
-      h("p", { class: "meta" }, `${req.shots.length} shadow${req.shots.length > 1 ? "s" : ""} · grid ${res.resolutionDeg.toFixed(3)}° · computed in ${(res.elapsedMs / 1000).toFixed(2)} s`),
+      h("p", { class: "meta" }, `${req.shots.length} shadow${req.shots.length > 1 ? "s" : ""} · grid ${res.resolutionDeg.toFixed(2)}°`),
       res.warnings.length ? h("details", { class: "notes", open: !res.regions.length }, h("summary", null, `Notes (${res.warnings.length})`), h("ul", null, res.warnings.map((w) => h("li", null, icon("warn", 16), h("span", null, w))))) : null,
     );
     this.drawMap(res, null);

@@ -203,7 +203,7 @@ const claimBody = h("div");
 const claimSlot = h(
   "details",
   { class: "card result claim-card" },
-  h("summary", null, h("span", null, h("strong", null, "Does a claimed time match?"), h("small", null, "EXIF DateTimeOriginal, a post date, a witness statement"))),
+  h("summary", null, h("span", null, h("strong", null, "Does a claimed time match?"), h("small", null, "EXIF, post date, witness…"))),
   claimBody,
 );
 function renderClaimSlot(): void {
@@ -226,8 +226,10 @@ function setStatus(text: string, fraction: number | null = null): void {
   if (fraction !== null) progress.value = fraction;
 }
 
-function emptyState(errors: FieldError[]): HTMLElement {
+function emptyState(errors: FieldError[]): HTMLElement | null {
   const s = store.state;
+  // Guided start screen: nothing to show on the results side yet.
+  if (!expert && !started) return null;
   return h(
     "section",
     { class: "card result empty" },
@@ -252,8 +254,7 @@ function emptyState(errors: FieldError[]): HTMLElement {
           ...(!expert && !started ? [] : [h("p", { class: "hint" }, "Or start from an example:"), exampleButtons()]),
         ]
       : [
-          h("h3", null, "Almost there"),
-          h("p", { class: "hint" }, "To compute, complete:"),
+          h("h3", null, "Still needed"),
           h("ul", { class: "todo" }, [...new Map(errors.map((e) => [e.msg, e])).values()].slice(0, 8).map((e) => h("li", null, h("button", { type: "button", class: "link", onclick: () => focusField(e.key) }, e.msg)))),
         ],
   );
@@ -302,7 +303,8 @@ function solve(): void {
   if (!built.ok) {
     solved = null;
     setStatus("");
-    body.replaceChildren(emptyState(built.errors));
+    const empty = emptyState(built.errors);
+    body.replaceChildren(...(empty ? [empty] : []));
     return;
   }
   const view = s.mode === "time" ? timeView.el : placeView.el;

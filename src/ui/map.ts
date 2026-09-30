@@ -14,7 +14,7 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { GeoCell, GeoRegion } from "../core/models";
-import { h } from "./dom";
+import { h, icon, info } from "./dom";
 
 const TILES_KEY = "shadowclock.tiles";
 const listeners = new Set<() => void>();
@@ -53,14 +53,13 @@ function baseMap(el: HTMLElement): L.Map {
   return map;
 }
 
-/** Placeholder asking for consent before any tile is requested. */
+/** Compact consent row: no tile is requested until the user asks for the map. */
 function consent(onEnable: () => void, what: string): HTMLElement {
   return h(
     "div",
     { class: "map-consent" },
-    h("p", null, what),
-    h("p", { class: "hint" }, "Map tiles come from OpenStreetMap. Loading them reveals the area you view to the tile server."),
-    h("button", { type: "button", class: "btn", onclick: onEnable }, "Load map"),
+    h("button", { type: "button", class: "btn", onclick: onEnable }, icon("pin", 16), what),
+    info("Map privacy", "Map tiles come from OpenStreetMap. Loading them tells the tile server which area you are looking at. Everything else stays in your browser."),
   );
 }
 
@@ -89,7 +88,7 @@ export function mountSiteMap(host: HTMLElement, onPick: (lat: number, lon: numbe
 
   const init = () => {
     if (map || !enabled()) {
-      if (!enabled()) host.replaceChildren(consent(() => setTilesEnabled(true), "Click the map to set the place, or type/paste coordinates above."));
+      if (!enabled()) host.replaceChildren(consent(() => setTilesEnabled(true), "Pick on a map"));
       return;
     }
     const el = h("div", { class: "map" });
@@ -182,7 +181,7 @@ export function mountResultMap(host: HTMLElement, colour: (m: number) => string)
   const init = () => {
     if (map) return;
     if (!enabled()) {
-      host.replaceChildren(consent(() => setTilesEnabled(true), "Show the candidate areas on a map."));
+      host.replaceChildren(consent(() => setTilesEnabled(true), "Show on a map"));
       return;
     }
     const el = h("div", { class: "map tall" });

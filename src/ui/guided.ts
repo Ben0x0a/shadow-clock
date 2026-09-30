@@ -14,7 +14,7 @@
  */
 
 import { parseLocation } from "../core/parse";
-import { h, icon } from "./dom";
+import { h, icon, info } from "./dom";
 import { constraintsSummary, renderConstraints } from "./panels/constraints";
 import { addShotButtons, renderShots, shadowSummary } from "./panels/shots";
 import { renderSearchArea, renderSite, siteSummary } from "./panels/site";
@@ -80,7 +80,7 @@ function steps(store: Store, invalid: Set<string>): Step[] {
         complete: () => true,
         summary: extraSummary,
         body: (root) => {
-          root.append(h("p", { class: "section-intro" }, "Each extra shadow narrows the answer. Another object in the same photo shares its instant; another photo of the same place needs the time gap between the two (EXIF differences are usually exact)."));
+          root.append(h("div", { class: "label-row" }, h("span", { class: "section-intro" }, "Each extra shadow narrows the answer."), info("Extra shadows", "Another object in the same photo shares its instant. Another photo of the same place needs the time gap after the first photo — the difference between the two EXIF timestamps is usually exact, even when the camera clock is wrong.")));
           const list = h("div", { class: "shots" });
           renderShots(list, store, invalid, { variant: "guided", from: 1 });
           root.append(list, addShotButtons(store));
@@ -108,7 +108,7 @@ function steps(store: Store, invalid: Set<string>): Step[] {
       complete: () => true,
       summary: extraSummary,
       body: (root) => {
-        root.append(h("p", { class: "section-intro" }, "One shadow gives a ring of possible places. Photos taken at other times add rings that cross at the answer."));
+        root.append(h("div", { class: "label-row" }, h("span", { class: "section-intro" }, "Photos at other times cross at the answer."), info("Why more photos", "One shadow places you on a ring of possible places. Each photo taken at another time adds a ring; the rings cross where the photos were taken.")));
         const list = h("div", { class: "shots" });
         renderShots(list, store, invalid, { variant: "guided", from: 1 });
         root.append(list, addShotButtons(store));

@@ -16,7 +16,7 @@
 import { buildObservation } from "../../core/measurement";
 import type { Component, TipEdge } from "../../core/models";
 import { formatDuration, parseDateTime, parseDuration } from "../../core/parse";
-import { field, h, icon, segmented, svg } from "../dom";
+import { field, h, icon, info, segmented, svg } from "../dom";
 import { buildShadowOnly } from "../request";
 import { type AppState, MAX_SHOTS, newShot, type ShotState, type Store } from "../state";
 
@@ -73,6 +73,16 @@ function compass(sh: ShotState): SVGElement {
   g.append(svg("circle", { r: 2, class: "c-base" }));
   return g;
 }
+
+/** Short explanations behind the "i" buttons. */
+const INFO: Record<string, string> = {
+  h: "Height of a vertical object (post, pole, person, wall edge). Any unit, as long as the shadow uses the same one: only the ratio matters.",
+  l: "Length of its shadow on flat, level ground, from the base of the object to the tip.",
+  r: "Height divided by shadow length, when the scene gives proportions but no absolute size.",
+  a: "The Sun's angle above the horizon, if you already know it (e.g. from a solved scene).",
+  tol: "The largest error you consider possible for each value. It is a hard bound: the true value is certainly within ± this amount. Use 0 only if the value is exact.",
+  az: "Direction from the base of the object to the tip of its shadow, clockwise from true north (0° = N, 90° = E). Optional: leave empty if unknown. Without it, each day has a morning and an afternoon solution.",
+};
 
 export type ShotVariant = "guided" | "expert";
 
@@ -180,25 +190,24 @@ function shotCard(
     h(
       "div",
       { class: "pair" },
-      text(base, what, { placeholder: base === "a" ? "degrees" : "value", suffix: unitHint }),
-      text(`${base}t`, "±", { placeholder: "tolerance", suffix: unitHint }),
+      text(base, what, { placeholder: base === "a" ? "degrees" : "value", suffix: unitHint, info: INFO[base] }),
+      text(`${base}t`, "±", { placeholder: "max", suffix: unitHint, info: base === "h" ? INFO.tol : undefined }),
     );
 
   const elevFields =
     sh.method === "lengths"
       ? [
           h("div", { class: "stack" }, pair("h", "Object height"), pair("l", "Shadow length")),
-          h("small", { class: "hint" }, "Any unit, the same for both — only the ratio matters. ± is how far off each value can be at most. Measure on flat, level ground."),
         ]
       : sh.method === "ratio"
-        ? [pair("r", "Height ÷ shadow"), h("small", { class: "hint" }, "Useful when the scene gives proportions but no absolute size.")]
-        : [pair("a", "Sun elevation", "°"), h("small", { class: "hint" }, "Angle of the Sun above the horizon, e.g. from a solved scene.")];
+        ? [pair("r", "Height ÷ shadow")]
+        : [pair("a", "Sun elevation", "°")];
 
   // Time relation block.
   let timeBlock: HTMLElement | null;
   if (s.mode === "time") {
     if (i === 0) {
-      timeBlock = guided ? null : h("p", { class: "note" }, icon("clock", 16), "Reference photo: its date and time are what ShadowClock solves for.");
+      timeBlock = null;
     } else {
       const parsed = parseDuration(sh.offset);
       timeBlock = h(
@@ -225,7 +234,8 @@ function shotCard(
                 invalid: inv("offset"),
                 placeholder: "+01:23:04",
                 inputmode: "text",
-                hint: parsed !== null ? formatDuration(parsed, true) : "e.g. +01:23:04, −5 min, 2 h 10 min",
+                hint: parsed !== null ? formatDuration(parsed, true) : undefined,
+                info: "Time between the first photo and this one, e.g. +01:23:04, −5 min or 2 h 10 min. Take it from the difference between the two EXIF timestamps: it is reliable even when the camera clock itself is wrong.",
                 onInput: (v) => { set((x) => (x.offset = v)); refresh(); },
               }),
               field({
@@ -235,11 +245,10 @@ function shotCard(
                 invalid: inv("offsetTol"),
                 placeholder: "2 s",
                 inputmode: "text",
-                hint: "EXIF differences are usually exact to 1–2 s",
                 onInput: (v) => set((x) => (x.offsetTol = v)),
               }),
             )
-          : h("p", { class: "note" }, "Same instant as the first shadow: both see exactly the same Sun."),
+          : null,
       );
     }
   } else {
@@ -255,7 +264,8 @@ function shotCard(
         placeholder: "2024-07-14 15:32:10",
         inputmode: "text",
         wide: true,
-        hint: p && p.offsetMin !== null ? "Offset read from the text" : "Paste EXIF (2024:07:14 15:32:10) or ISO 8601",
+        hint: p && p.offsetMin !== null ? "Offset read from the text" : undefined,
+        info: "Paste the EXIF DateTimeOriginal (2024:07:14 15:32:10) or an ISO 8601 date. If the text has no offset, the UTC offset field is used.",
         onInput: (v) => { set((x) => (x.time = v)); refresh(); },
       }),
       field({ label: "UTC offset", value: sh.timeOffset, name: `${sh.id}.timeOffset`, invalid: inv("timeOffset"), placeholder: "+00:00", inputmode: "text", onInput: (v) => set((x) => (x.timeOffset = v)) }),
@@ -271,7 +281,8 @@ function shotCard(
       name: `${sh.id}.${key}`,
       invalid: inv(key),
       suffix: "°",
-      placeholder: key === "az" ? (guided ? "optional" : "0–360") : "tolerance",
+      placeholder: key === "az" ? "optional" : "max",
+      info: key === "az" ? INFO.az : undefined,
       onInput: (v) => {
         set((x) => {
           x[key] = v;
@@ -281,13 +292,13 @@ function shotCard(
         redrawCompass();
       },
     });
-  const azValues = h("div", { class: "pair" }, azInput("az", "Shadow direction"), azInput("azt", "±"));
+  const azValues = h("div", { class: "pair grow" }, azInput("az", "Direction"), azInput("azt", "±"));
   const compassHolder = h("div", { class: "compass-wrap" }, compass(sh));
   const redrawCompass = () => compassHolder.replaceChildren(compass(me(live())));
   const azMain = h(
     "div",
     { class: "az-grid" },
-    h("div", { class: "stack" }, azValues, h("small", { class: "hint" }, "From the object's base to the shadow tip, clockwise from true north (0° = N, 90° = E).", guided ? " Leave empty if unknown." : "")),
+    azValues,
     compassHolder,
   );
   const azRefBlock = h(
@@ -302,7 +313,7 @@ function shotCard(
           "div",
           { class: "row" },
           field({ label: "Declination (east +)", value: sh.decl, name: `${sh.id}.decl`, invalid: inv("decl"), suffix: "°", onInput: (v) => { set((x) => (x.decl = v)); refresh(); } }),
-          h("small", { class: "hint grow" }, "Look it up for the place and date, e.g. with the ", h("a", { href: "https://www.ngdc.noaa.gov/geomag/calculators/magcalc.shtml", target: "_blank", rel: "noopener noreferrer" }, "NOAA calculator"), "."),
+          info("Magnetic declination", "A compass points to magnetic north. Enter the local declination for the place and date (east positive), e.g. from the NOAA magnetic field calculator (ngdc.noaa.gov)."),
         )
       : null,
   );
@@ -330,7 +341,7 @@ function shotCard(
     h(
       "div",
       { class: "field" },
-      h("label", { for: tipSelectId }, "Shadow tip measured at"),
+      h("div", { class: "label-row" }, h("label", { for: tipSelectId }, "Tip measured at"), info("Shadow tip", "The Sun is not a point, so the end of a shadow is blurred over about half a degree. If you measured to the sharp inner edge or the faint outer edge, say so; otherwise ShadowClock adds ±0.27° to be safe.")),
       h(
         "select",
         { id: tipSelectId, onchange: (e: Event) => { set((x) => (x.tip = (e.target as HTMLSelectElement).value as TipEdge)); refresh(); } },
@@ -342,7 +353,7 @@ function shotCard(
         ] as const).map(([v, l]) => h("option", { value: v, selected: sh.tip === v }, l)),
       ),
     ),
-    field({ label: "Object may lean up to", value: sh.tilt, name: `${sh.id}.tilt`, invalid: inv("tilt"), suffix: "°", onInput: (v) => { set((x) => (x.tilt = v)); refresh(); } }),
+    field({ label: "Max lean", info: "How far the object could be from perfectly vertical. Posts, poles and walls are rarely exactly plumb; 1° is a safe default.", value: sh.tilt, name: `${sh.id}.tilt`, invalid: inv("tilt"), suffix: "°", onInput: (v) => { set((x) => (x.tilt = v)); refresh(); } }),
   );
   const actions = h(
     "div",
@@ -384,10 +395,10 @@ function shotCard(
             "div",
             { class: "stack" },
             nameField,
-            h("span", { class: "field-label" }, "Measure the Sun elevation from"),
+            h("div", { class: "label-row" }, h("span", { class: "field-label" }, "Input as"), info("Input", "Height + shadow: two lengths in the same unit. Ratio: height ÷ shadow when only proportions are known. Angle: the Sun's elevation directly, e.g. from a solved scene.")),
             methodSegs,
             tipTilt,
-            h("span", { class: "field-label" }, "North reference for the direction"),
+            h("span", { class: "field-label" }, "North reference"),
             azRefBlock,
           ),
         ),
@@ -407,10 +418,16 @@ function shotCard(
             h("input", { type: "checkbox", role: "switch", checked: sh.azOn, onchange: (e: Event) => set((x) => (x.azOn = (e.target as HTMLInputElement).checked), true) }),
             h("span", null, "I know which way the shadow points"),
           ),
-          sh.azOn ? h("div", { class: "stack" }, azMain, azRefBlock) : h("p", { class: "note" }, "Without direction, every day has a morning and an afternoon solution."),
+          sh.azOn ? h("div", { class: "stack" }, azMain, azRefBlock) : null,
         ),
         actions,
       ];
+
+  // The first shadow in the guided view is the step itself: no nested card chrome.
+  if (guided && i === 0) {
+    refresh();
+    return h("div", { class: "shot-flat shot-1" }, ...body.filter((x): x is HTMLElement => !!x), out);
+  }
 
   const details = h(
     "details",

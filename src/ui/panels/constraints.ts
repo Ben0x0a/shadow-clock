@@ -7,7 +7,7 @@
  * Depends on: ui/dom.ts, ui/state.ts, ui/format.ts.
  */
 
-import { field, h, replace } from "../dom";
+import { field, h, info, replace } from "../dom";
 import { MONTH_NAMES } from "../format";
 import type { AppState, Store } from "../state";
 
@@ -49,7 +49,7 @@ export function renderConstraints(root: HTMLElement, store: Store, invalid: Set<
     h(
       "div",
       { class: "field" },
-      h("label", { for: zoneSelectId }, "Show and filter times in"),
+      h("label", { for: zoneSelectId }, "Show times in"),
       h(
         "select",
         { id: zoneSelectId, onchange: (e: Event) => upd((st) => (st.cons.zoneKind = (e.target as HTMLSelectElement).value as AppState["cons"]["zoneKind"]), true) },
@@ -115,26 +115,24 @@ export function renderConstraints(root: HTMLElement, store: Store, invalid: Set<
     h(
       "fieldset",
       { class: "group" },
-      h("legend", null, "Time of day (optional)"),
+      h("legend", null, "Time of day ", info("Time of day", "In the zone chosen above. A window like 22:00 → 04:00 wraps past midnight.")),
       h("div", { class: "row" }, timeInput("todFrom", "From"), timeInput("todTo", "To")),
-      h("small", { class: "hint" }, "In the zone chosen above. A window like 22:00 → 04:00 wraps past midnight."),
     ),
     h(
       "fieldset",
       { class: "group" },
-      h("legend", null, "Absolute bounds (optional)"),
+      h("legend", null, "Date bounds ", info("Date bounds", "E.g. not after the upload date, not before a building visible in the photo was finished.")),
       h(
         "div",
         { class: "row" },
         field({ label: "Not before", value: s.cons.notBefore, name: "cons.notBefore", invalid: invalid.has("cons.notBefore"), inputmode: "text", placeholder: "2024-03-01", onInput: (v) => upd((st) => (st.cons.notBefore = v)) }),
         field({ label: "Not after", value: s.cons.notAfter, name: "cons.notAfter", invalid: invalid.has("cons.notAfter"), inputmode: "text", placeholder: "2024-10-31 18:00", onInput: (v) => upd((st) => (st.cons.notAfter = v)) }),
       ),
-      h("small", { class: "hint" }, "E.g. the upload date, or when a building visible in the photo was finished."),
     ),
   ];
 
   replace(root,
-    h("p", { class: "section-intro" }, "Anything you already know narrows the answer. Shadows cannot tell years apart, so give the years to consider."),
+    h("div", { class: "label-row" }, h("span", { class: "section-intro" }, "Which years should be checked?"), info("Years", "The Sun follows the same path every year, so shadows cannot tell years apart. Every year in the range is checked separately.")),
     h(
       "div",
       { class: "row" },
