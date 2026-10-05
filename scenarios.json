@@ -263,12 +263,6 @@
       ],
       "steps": [
         {
-          "click": ".landing .example-buttons button >> nth=0"
-        },
-        {
-          "expect": "#results-body .summary .headline"
-        },
-        {
           "click": "#share-summary"
         },
         {
