@@ -4,7 +4,7 @@ build/
 dist/
 *.tsbuildinfo
 
-# Python bytecode (e2e/serve_public.py, platform tools)
+# Python bytecode (platform tools)
 __pycache__/
 
 # Editors / OS

@@ -28,8 +28,10 @@ export function mountToolbar(header: HTMLElement, button: HTMLButtonElement, too
     header.classList.toggle("menu-open", open);
     button.setAttribute("aria-expanded", String(open));
   });
-  // Native <details> menus do not close by themselves.
+  // Native <details> menus do not close by themselves: close them on a click elsewhere,
+  // and when keyboard focus leaves them (an open menu must not cover the focused element).
   document.addEventListener("click", (e) => closeMenus(e.target as Node));
+  document.addEventListener("focusin", (e) => closeMenus(e.target as Node));
   // WHY a keydown listener here: Escape is not a single-character shortcut (WCAG 2.1.4
   // concerns printable keys), and it only closes what is open.
   document.addEventListener("keydown", (e) => {

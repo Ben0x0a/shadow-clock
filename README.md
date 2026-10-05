@@ -118,9 +118,8 @@ of a US provider (`_headers` then translates into that server's configuration).
 
 | Library | Version | Source | Licence |
 |---|---|---|---|
-| Leaflet | 1.9.4 | npm, pinned by `package-lock.json`, bundled into `app.js` | BSD-2-Clause |
-| Leaflet stylesheet | 1.9.4 | `src/ui/leaflet.css`: copy of `leaflet/dist/leaflet.css` (SHA-256 `a7837102824184820dfa198d1ebcd109ff6d0ff9a2672a074b9a1b4d147d04c6`) without its three unused `url(images/…)` backgrounds | BSD-2-Clause |
-| static-web-platform | 1.2.0 | `platform/` submodule (shared base: consent, storage, sharing, dialogs, build, gate) | see its repository |
+| Leaflet | 1.9.4 | npm, pinned by `package-lock.json`; script bundled into `app.js`, stylesheet into `app.css` (its images embedded) | BSD-2-Clause |
+| static-web-platform | 1.4.0 | `platform/` submodule (shared base: consent, storage, sharing, dialogs, build, gate) | see its repository |
 
 Nothing else from `node_modules/` is shipped: TypeScript, esbuild and Playwright are build
 and test tools only, pinned by `package-lock.json`.
@@ -134,18 +133,16 @@ and test tools only, pinned by `package-lock.json`.
    for one, so the tile origin declares `"referrerPolicy": "strict-origin"` in
    `site.json`: only this site's origin is sent, never the page URL, and the consent
    dialog states it.
-3. **Leaflet stylesheet copy.** The platform's esbuild bundle has no loader for images;
-   ShadowClock uses none of Leaflet's, so `src/ui/leaflet.css` is the original without them.
-4. **No `content.ts`.** ShadowClock has no editable content list; its examples are
+3. **No `content.ts`.** ShadowClock has no editable content list; its examples are
    generated from the solar model in `src/core/examples.ts`.
-5. **Core messages as keys.** The solver also runs inside the worker, where `t()` does not
+4. **Core messages as keys.** The solver also runs inside the worker, where `t()` does not
    exist, so it returns message keys that the UI translates (`src/ui/context.ts`).
-6. **Gaussian model kept in the core.** The UI only offers declared bounds; the core still
+5. **Gaussian model kept in the core.** The UI only offers declared bounds; the core still
    implements the Gaussian (σ) model, unused by the app.
-7. **One `results` feature.** The time and place answers share the status, empty state
+6. **One `results` feature.** The time and place answers share the status, empty state
    and announcements, so they live in one feature folder (`features/results/time`,
    `features/results/place`) instead of two features that would need each other.
-8. **A shared `ui/context.ts`.** The platform instance is set once in `main.ts`, so the
+7. **A shared `ui/context.ts`.** The platform instance is set once in `main.ts`, so the
    many render helpers call `t()` without threading the platform through every call.
 
 ## Not tested automatically

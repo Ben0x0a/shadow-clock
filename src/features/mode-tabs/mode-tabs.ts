@@ -4,14 +4,18 @@
  *
  * Defines: mountModeTabs().
  * Used by: main.ts.
- * Depends on: core/form.ts (Mode), state/case.ts, ui/dom.ts, ui/context.ts.
+ * Depends on: core/form.ts (Mode), state/case.ts, state/view.ts, ui/dom.ts, ui/context.ts.
  *
  * Keyboard: Tab reaches the selected tab only; Left/Right (wrapping), Home and End move
  * between tabs and select them. The active mode is never put in the URL.
+ *
+ * Shown in the expert view only: the guided view asks for the mode on its start screen
+ * (and "Start a new case" returns there), so the tabs would only add noise.
  */
 
 import type { Mode } from "../../core/form.ts";
 import type { CaseStore } from "../../state/case.ts";
+import type { ViewState } from "../../state/view.ts";
 import { t } from "../../ui/context.ts";
 import { h } from "../../ui/dom.ts";
 import "./mode-tabs.css";
@@ -22,14 +26,20 @@ const MODES: { value: Mode; label: string; title: string }[] = [
 ];
 
 /** `panel` is the element the tabs control (gets role="tabpanel"). */
-export function mountModeTabs(slot: HTMLElement, panel: HTMLElement, cases: CaseStore): void {
+export function mountModeTabs(slot: HTMLElement, panel: HTMLElement, cases: CaseStore, view: ViewState): void {
   const tabs = MODES.map((m) =>
     h("button", { type: "button", role: "tab", id: `tab-${m.value}`, class: "mode-tab", "aria-controls": panel.id, title: t(m.title) }, t(m.label)),
   );
   const list = h("div", { role: "tablist", class: "mode-tabs", "aria-label": t("app.mode") }, tabs);
-  panel.setAttribute("role", "tabpanel");
-
   const sync = (): void => {
+    slot.hidden = !view.expert;
+    // The panel is a tab panel only while its tabs are shown.
+    if (!view.expert) {
+      panel.removeAttribute("role");
+      panel.removeAttribute("aria-labelledby");
+      return;
+    }
+    panel.setAttribute("role", "tabpanel");
     MODES.forEach((m, i) => {
       const tab = tabs[i];
       if (!tab) return;
@@ -55,6 +65,7 @@ export function mountModeTabs(slot: HTMLElement, panel: HTMLElement, cases: Case
     select(next, true);
   });
   cases.subscribe((_s, structural) => structural && sync());
+  view.subscribe(sync);
   sync();
   slot.replaceChildren(list);
 }

@@ -9639,6 +9639,9 @@
       shareManual: "Copy this link manually:",
       assetSiteOnly: "Available on the hosted site only",
       supportLink: "Buy me a coffee",
+      devBuild: "Dev build",
+      redirectBlocked: "The server redirected the request elsewhere; it was not followed and nothing was sent further.",
+      serverGroup: "{purpose}: {n} servers (list from {source})",
       accessibility: "Accessibility",
       shortcutsToggle: "Single-key keyboard shortcuts",
       shortcutsHint: "Turn them off if you use voice control or a switch device: a spoken word could trigger them.",
@@ -9700,6 +9703,9 @@
       shareManual: "Copiez ce lien manuellement :",
       assetSiteOnly: "Disponible uniquement sur le site en ligne",
       supportLink: "Offrez-moi un café",
+      devBuild: "Version de développement",
+      redirectBlocked: "Le serveur a redirigé la requête ailleurs ; elle n'a pas été suivie et rien n'a été envoyé plus loin.",
+      serverGroup: "{purpose} : {n} serveurs (liste issue de {source})",
       accessibility: "Accessibilité",
       shortcutsToggle: "Raccourcis clavier à une touche",
       shortcutsHint: "Désactivez-les si vous utilisez le contrôle vocal ou un contacteur : un mot prononcé pourrait les déclencher.",
@@ -9857,17 +9863,32 @@
   }
 
   // node_modules/static-web-platform/src/services/network.ts
-  function createNetwork(consent2) {
+  var RedirectBlockedError = class extends Error {
+    origin;
+    constructor(origin) {
+      super(`${origin} answered with a redirect; it was not followed (nothing was sent further)`);
+      this.name = "RedirectBlockedError";
+      this.origin = origin;
+    }
+  };
+  function createNetwork(consent2, doFetch = (...args) => fetch(...args)) {
     const referrerOf = (origin) => consent2.declared()[origin]?.referrerPolicy ?? "no-referrer";
     return {
       async fetch(url, init = {}, options = {}) {
         const origin = new URL(url).origin;
         if (!await consent2.request(origin, options)) return null;
-        return fetch(url, { ...init, credentials: "omit", referrerPolicy: referrerOf(origin) });
+        const response = await doFetch(url, { ...init, credentials: "omit", referrerPolicy: referrerOf(origin), redirect: "manual" });
+        if (response.type === "opaqueredirect" || response.status >= 300 && response.status < 400) {
+          throw new RedirectBlockedError(origin);
+        }
+        return response;
       },
       async image(img, url, fallback, options = {}) {
         try {
           const origin = new URL(url).origin;
+          if (consent2.declared()[origin]?.scope === "request") {
+            throw new Error(`net.image() refuses ${origin}: declared "scope": "request" (use net.fetch with disclose)`);
+          }
           if (await consent2.request(origin, options)) {
             img.referrerPolicy = referrerOf(origin);
             img.onerror = () => img.replaceWith(fallback());
@@ -10063,6 +10084,10 @@
       return { setStatus };
     }
     slot.append(privacy, accessibility, status);
+    if (site.mode === "dev") {
+      setStatus(t2("devBuild"));
+      return { setStatus };
+    }
     setStatus(t2("offlineCopy", { version: shortVersion(site.version), date: displayDate(site.date) }));
     if (site.siteUrl) {
       const runCheck = async () => {
@@ -10073,7 +10098,9 @@
             "span",
             {},
             `${t2("updateAvailable")} (${displayDate(result.info.date)}) — `,
-            el("a", { href: result.downloadUrl, textContent: t2("updateDownload") })
+            // download: honoured only for same-origin links (not from file://);
+            // the server's Content-Disposition: attachment does the real work.
+            el("a", { href: result.downloadUrl, download: site.downloadName, textContent: t2("updateDownload") })
           );
           setStatus(wrap, true);
         } else if (result.kind === "failed") {
@@ -10151,21 +10178,37 @@
       "ask": t2("stateAsk"),
       "per-request": t2("stateRequest")
     };
+    const originRow = (origin) => {
+      const state = consent2().state(origin);
+      const forget = button("forget", {
+        disabled: state === "ask" || state === "per-request",
+        onclick: () => {
+          consent2().forget(origin);
+          renderPrivacy();
+        }
+      });
+      forget.setAttribute("aria-label", `${t2("forget")} — ${origin}`);
+      return el("li", {}, el("span", {}, el("strong", { textContent: origin }), ` — ${stateLabel[state]}`), forget);
+    };
     const renderPrivacy = () => {
-      const origins = Object.keys(consent2().declared());
-      list.replaceChildren(...origins.map((origin) => {
-        const state = consent2().state(origin);
-        const forget = button("forget", {
-          disabled: state === "ask" || state === "per-request",
-          onclick: () => {
-            consent2().forget(origin);
-            renderPrivacy();
-          }
-        });
-        forget.setAttribute("aria-label", `${t2("forget")} — ${origin}`);
-        return el("li", {}, el("span", {}, el("strong", { textContent: origin }), ` — ${stateLabel[state]}`), forget);
+      const declared = consent2().declared();
+      const groups = /* @__PURE__ */ new Map();
+      const single = [];
+      for (const [origin, def] of Object.entries(declared)) {
+        if (def.group) groups.set(def.group, [...groups.get(def.group) ?? [], origin]);
+        else single.push(origin);
+      }
+      list.replaceChildren(...single.map(originRow), ...[...groups].map(([group, origins]) => {
+        const first = declared[origins[0] ?? ""];
+        const purpose = first ? purposeText(first.purpose, i18n.lang) : "";
+        return el("li", { className: "origin-group" }, el(
+          "details",
+          {},
+          el("summary", { textContent: t2("serverGroup", { purpose, n: origins.length, source: group }) }),
+          el("ul", { className: "origin-list" }, ...origins.map(originRow))
+        ));
       }));
-      if (!origins.length) list.append(el("li", { textContent: "—" }));
+      if (!single.length && !groups.size) list.append(el("li", { textContent: "—" }));
     };
     const privacyDialog = labelled(
       el(
@@ -14242,13 +14285,19 @@
     { value: "time", label: "app.findTime", title: "app.findTimeTitle" },
     { value: "place", label: "app.findPlace", title: "app.findPlaceTitle" }
   ];
-  function mountModeTabs(slot, panel2, cases2) {
+  function mountModeTabs(slot, panel2, cases2, view2) {
     const tabs = MODES.map(
       (m) => h("button", { type: "button", role: "tab", id: `tab-${m.value}`, class: "mode-tab", "aria-controls": panel2.id, title: t(m.title) }, t(m.label))
     );
     const list = h("div", { role: "tablist", class: "mode-tabs", "aria-label": t("app.mode") }, tabs);
-    panel2.setAttribute("role", "tabpanel");
     const sync = () => {
+      slot.hidden = !view2.expert;
+      if (!view2.expert) {
+        panel2.removeAttribute("role");
+        panel2.removeAttribute("aria-labelledby");
+        return;
+      }
+      panel2.setAttribute("role", "tabpanel");
       MODES.forEach((m, i) => {
         const tab = tabs[i];
         if (!tab) return;
@@ -14273,6 +14322,7 @@
       select(next, true);
     });
     cases2.subscribe((_s, structural) => structural && sync());
+    view2.subscribe(sync);
     sync();
     slot.replaceChildren(list);
   }
@@ -15618,6 +15668,7 @@
       button.setAttribute("aria-expanded", String(open));
     });
     document.addEventListener("click", (e) => closeMenus(e.target));
+    document.addEventListener("focusin", (e) => closeMenus(e.target));
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closeMenus();
     });
@@ -15659,7 +15710,7 @@
     exampleButtons: examples,
     focusField: inputs.focusField
   });
-  mountModeTabs(byId("mode-slot"), byId("workspace"), cases);
+  mountModeTabs(byId("mode-slot"), byId("workspace"), cases, view);
   mountExpertToggle(byId("expert-slot"), view);
   mountExamplesMenu(byId("examples-slot"), loadExample);
   mountShareMenu(byId("share-slot"), {

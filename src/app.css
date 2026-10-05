@@ -256,6 +256,8 @@ button, input, select {
   display: flex;
   gap: 4px;
   align-items: center;
+  /* Right-aligned even when the mode tabs (the flexible middle) are hidden. */
+  margin-left: auto;
 }
 
 
@@ -475,11 +477,6 @@ progress {
     clip: rect(0 0 0 0);
     white-space: nowrap;
   }
-}
-
-/* The skip link must show above the header (base.css gives it z-index 10). */
-.skip-link {
-  z-index: 40;
 }
 
 /* ---- Dialogs (the app's and the platform's) ----------------------------------------- */

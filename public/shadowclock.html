@@ -15,7 +15,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob: https://tile.openstreetmap.org; connect-src https://shadow-clock.forandchips.com; manifest-src 'none'; worker-src blob:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob: https://tile.openstreetmap.org; connect-src https://shadow-clock.forandchips.com; manifest-src 'none'; worker-src blob:; font-src data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="x-dns-prefetch-control" content="off">
 <meta name="theme-color" content="#184f95">
@@ -62,7 +62,7 @@ a { color: var(--accent); }
 [hidden] { display: none !important; }
 .visually-hidden { position: absolute !important; width: 1px; height: 1px; margin: -1px;
                    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-.skip-link { position: absolute; left: 8px; top: -100px; z-index: 10; padding: 12px 14px; min-height: 44px;
+.skip-link { position: absolute; left: 8px; top: -100px; z-index: 2147483647;   /* above any sticky header */ padding: 12px 14px; min-height: 44px;
              background: var(--accent); color: var(--on-accent); border-radius: 6px; }
 .skip-link:focus { top: 8px; }
 
@@ -103,6 +103,8 @@ dialog .choice input { width: 24px; height: 24px; margin: 0; flex: none; }
 dialog .hint { color: var(--muted); font-size: 13px; }
 .dialog-buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 .origin-list { list-style: none; padding: 0; }
+.origin-group { display: block !important; }
+.origin-group summary { cursor: pointer; padding: 10px 0; min-height: 44px; }
 .origin-list li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px;
                   padding: 8px 0; border-bottom: 1px solid var(--border); }
 
@@ -112,7 +114,8 @@ dialog .hint { color: var(--muted); font-size: 13px; }
   button, .button { min-height: 44px; }
   input, select, textarea { font-size: max(16px, 1em); }
   input:not([type=checkbox]):not([type=radio]), select { min-height: 44px; }
-  dialog .choice input { width: 44px; height: 44px; }
+  dialog .choice { min-height: 44px; }
+  dialog .choice label { flex: 1; min-height: 44px; display: flex; align-items: center; }   /* the label row is the target */
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
@@ -782,7 +785,7 @@ legend .info {
   margin-top: 16px;
 }
 
-/* src/ui/leaflet.css */
+/* node_modules/leaflet/dist/leaflet.css */
 .leaflet-pane,
 .leaflet-tile,
 .leaflet-marker-icon,
@@ -1115,10 +1118,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
   border-radius: 5px;
 }
 .leaflet-control-layers-toggle {
+  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAaCAQAAAADQ4RFAAACf0lEQVR4AY1UM3gkARTePdvdoTxXKc+qTl3aU5U6b2Kbkz3Gtq3Zw6ziLGNPzrYx7946Tr6/ee/XeCQ4D3ykPtL5tHno4n0d/h3+xfuWHGLX81cn7r0iTNzjr7LrlxCqPtkbTQEHeqOrTy4Yyt3VCi/IOB0v7rVC7q45Q3Gr5K6jt+3Gl5nCoDD4MtO+j96Wu8atmhGqcNGHObuf8OM/x3AMx38+4Z2sPqzCxRFK2aF2e5Jol56XTLyggAMTL56XOMoS1W4pOyjUcGGQdZxU6qRh7B9Zp+PfpOFlqt0zyDZckPi1ttmIp03jX8gyJ8a/PG2yutpS/Vol7peZIbZcKBAEEheEIAgFbDkz5H6Zrkm2hVWGiXKiF4Ycw0RWKdtC16Q7qe3X4iOMxruonzegJzWaXFrU9utOSsLUmrc0YjeWYjCW4PDMADElpJSSQ0vQvA1Tm6/JlKnqFs1EGyZiFCqnRZTEJJJiKRYzVYzJck2Rm6P4iH+cmSY0YzimYa8l0EtTODFWhcMIMVqdsI2uiTvKmTisIDHJ3od5GILVhBCarCfVRmo4uTjkhrhzkiBV7SsaqS+TzrzM1qpGGUFt28pIySQHR6h7F6KSwGWm97ay+Z+ZqMcEjEWebE7wxCSQwpkhJqoZA5ivCdZDjJepuJ9IQjGGUmuXJdBFUygxVqVsxFsLMbDe8ZbDYVCGKxs+W080max1hFCarCfV+C1KATwcnvE9gRRuMP2prdbWGowm1KB1y+zwMMENkM755cJ2yPDtqhTI6ED1M/82yIDtC/4j4BijjeObflpO9I9MwXTCsSX8jWAFeHr05WoLTJ5G8IQVS/7vwR6ohirYM7f6HzYpogfS3R2OAAAAAElFTkSuQmCC);
   width: 36px;
   height: 36px;
 }
 .leaflet-retina .leaflet-control-layers-toggle {
+  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADQAAAA0CAQAAABvcdNgAAAEsklEQVR4AWL4TydIhpZK1kpWOlg0w3ZXP6D2soBtG42jeI6ZmQTHzAxiTbSJsYLjO9HhP+WOmcuhciVnmHVQcJnp7DFvScowZorad/+V/fVzMdMT2g9Cv9guXGv/7pYOrXh2U+RRR3dSd9JRx6bIFc/ekqHI29JC6pJ5ZEh1yWkhkbcFeSjxgx3L2m1cb1C7bceyxA+CNjT/Ifff+/kDk2u/w/33/IeCMOSaWZ4glosqT3DNnNZQ7Cs58/3Ce5HL78iZH/vKVIaYlqzfdLu8Vi7dnvUbEza5Idt36tquZFldl6N5Z/POLof0XLK61mZCmJSWjVF9tEjUluu74IUXvgttuVIHE7YxSkaYhJZam7yiM9Pv82JYfl9nptxZaxMJE4YSPty+vF0+Y2up9d3wwijfjZbabqm/3bZ9ecKHsiGmRflnn1MW4pjHf9oLufyn2z3y1D6n8g8TZhxyzipLNPnAUpsOiuWimg52psrTZYnOWYNDTMuWBWa0tJb4rgq1UvmutpaYEbZlwU3CLJm/ayYjHW5/h7xWLn9Hh1vepDkyf7dE7MtT5LR4e7yYpHrkhOUpEfssBLq2pPhAqoSWKUkk7EDqkmK6RrCEzqDjhNDWNE+XSMvkJRDWlZTmCW0l0PHQGRZY5t1L83kT0Y3l2SItk5JAWHl2dCOBm+fPu3fo5/3v61RMCO9Jx2EEYYhb0rmNQMX/vm7gqOEJLcXTGw3CAuRNeyaPWwjR8PRqKQ1PDA/dpv+on9Shox52WFnx0KY8onHayrJzm87i5h9xGw/tfkev0jGsQizqezUKjk12hBMKJ4kbCqGPVNXudyyrShovGw5CgxsRICxF6aRmSjlBnHRzg7Gx8fKqEubI2rahQYdR1YgDIRQO7JvQyD52hoIQx0mxa0ODtW2Iozn1le2iIRdzwWewedyZzewidueOGqlsn1MvcnQpuVwLGG3/IR1hIKxCjelIDZ8ldqWz25jWAsnldEnK0Zxro19TGVb2ffIZEsIO89EIEDvKMPrzmBOQcKQ+rroye6NgRRxqR4U8EAkz0CL6uSGOm6KQCdWjvjRiSP1BPalCRS5iQYiEIvxuBMJEWgzSoHADcVMuN7IuqqTeyUPq22qFimFtxDyBBJEwNyt6TM88blFHao/6tWWhuuOM4SAK4EI4QmFHA+SEyWlp4EQoJ13cYGzMu7yszEIBOm2rVmHUNqwAIQabISNMRstmdhNWcFLsSm+0tjJH1MdRxO5Nx0WDMhCtgD6OKgZeljJqJKc9po8juskR9XN0Y1lZ3mWjLR9JCO1jRDMd0fpYC2VnvjBSEFg7wBENc0R9HFlb0xvF1+TBEpF68d+DHR6IOWVv2BECtxo46hOFUBd/APU57WIoEwJhIi2CdpyZX0m93BZicktMj1AS9dClteUFAUNUIEygRZCtik5zSxI9MubTBH1GOiHsiLJ3OCoSZkILa9PxiN0EbvhsAo8tdAf9Seepd36lGWHmtNANTv5Jd0z4QYyeo/UEJqxKRpg5LZx6btLPsOaEmdMyxYdlc8LMaJnikDlhclqmPiQnTEpLUIZEwkRagjYkEibQErwhkTAKCLQEbUgkzJQWc/0PstHHcfEdQ+UAAAAASUVORK5CYII=);
   background-size: 26px 26px;
 }
 .leaflet-touch .leaflet-control-layers-toggle {
@@ -1159,6 +1164,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   margin: 5px -10px 5px -6px;
 }
 .leaflet-default-icon-path {
+  background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAApCAYAAADAk4LOAAAFgUlEQVR4Aa1XA5BjWRTN2oW17d3YaZtr2962HUzbDNpjszW24mRt28p47v7zq/bXZtrp/lWnXr337j3nPCe85NcypgSFdugCpW5YoDAMRaIMqRi6aKq5E3YqDQO3qAwjVWrD8Ncq/RBpykd8oZUb/kaJutow8r1aP9II0WmLKLIsJyv1w/kqw9Ch2MYdB++12Onxee/QMwvf4/Dk/Lfp/i4nxTXtOoQ4pW5Aj7wpici1A9erdAN2OH64x8OSP9j3Ft3b7aWkTg/Fm91siTra0f9on5sQr9INejH6CUUUpavjFNq1B+Oadhxmnfa8RfEmN8VNAsQhPqF55xHkMzz3jSmChWU6f7/XZKNH+9+hBLOHYozuKQPxyMPUKkrX/K0uWnfFaJGS1QPRtZsOPtr3NsW0uyh6NNCOkU3Yz+bXbT3I8G3xE5EXLXtCXbbqwCO9zPQYPRTZ5vIDXD7U+w7rFDEoUUf7ibHIR4y6bLVPXrz8JVZEql13trxwue/uDivd3fkWRbS6/IA2bID4uk0UpF1N8qLlbBlXs4Ee7HLTfV1j54APvODnSfOWBqtKVvjgLKzF5YdEk5ewRkGlK0i33Eofffc7HT56jD7/6U+qH3Cx7SBLNntH5YIPvODnyfIXZYRVDPqgHtLs5ABHD3YzLuespb7t79FY34DjMwrVrcTuwlT55YMPvOBnRrJ4VXTdNnYug5ucHLBjEpt30701A3Ts+HEa73u6dT3FNWwflY86eMHPk+Yu+i6pzUpRrW7SNDg5JHR4KapmM5Wv2E8Tfcb1HoqqHMHU+uWDD7zg54mz5/2BSnizi9T1Dg4QQXLToGNCkb6tb1NU+QAlGr1++eADrzhn/u8Q2YZhQVlZ5+CAOtqfbhmaUCS1ezNFVm2imDbPmPng5wmz+gwh+oHDce0eUtQ6OGDIyR0uUhUsoO3vfDmmgOezH0mZN59x7MBi++WDL1g/eEiU3avlidO671bkLfwbw5XV2P8Pzo0ydy4t2/0eu33xYSOMOD8hTf4CrBtGMSoXfPLchX+J0ruSePw3LZeK0juPJbYzrhkH0io7B3k164hiGvawhOKMLkrQLyVpZg8rHFW7E2uHOL888IBPlNZ1FPzstSJM694fWr6RwpvcJK60+0HCILTBzZLFNdtAzJaohze60T8qBzyh5ZuOg5e7uwQppofEmf2++DYvmySqGBuKaicF1blQjhuHdvCIMvp8whTTfZzI7RldpwtSzL+F1+wkdZ2TBOW2gIF88PBTzD/gpeREAMEbxnJcaJHNHrpzji0gQCS6hdkEeYt9DF/2qPcEC8RM28Hwmr3sdNyht00byAut2k3gufWNtgtOEOFGUwcXWNDbdNbpgBGxEvKkOQsxivJx33iow0Vw5S6SVTrpVq11ysA2Rp7gTfPfktc6zhtXBBC+adRLshf6sG2RfHPZ5EAc4sVZ83yCN00Fk/4kggu40ZTvIEm5g24qtU4KjBrx/BTTH8ifVASAG7gKrnWxJDcU7x8X6Ecczhm3o6YicvsLXWfh3Ch1W0k8x0nXF+0fFxgt4phz8QvypiwCCFKMqXCnqXExjq10beH+UUA7+nG6mdG/Pu0f3LgFcGrl2s0kNNjpmoJ9o4B29CMO8dMT4Q5ox8uitF6fqsrJOr8qnwNbRzv6hSnG5wP+64C7h9lp30hKNtKdWjtdkbuPA19nJ7Tz3zR/ibgARbhb4AlhavcBebmTHcFl2fvYEnW0ox9xMxKBS8btJ+KiEbq9zA4RthQXDhPa0T9TEe69gWupwc6uBUphquXgf+/FrIjweHQS4/pduMe5ERUMHUd9xv8ZR98CxkS4F2n3EUrUZ10EYNw7BWm9x1GiPssi3GgiGRDKWRYZfXlON+dfNbM+GgIwYdwAAAAASUVORK5CYII=);
 }
 .leaflet-container .leaflet-control-attribution {
   background: #fff;
@@ -2556,6 +2562,7 @@ select {
   display: flex;
   gap: 4px;
   align-items: center;
+  margin-left: auto;
 }
 .layout {
   display: grid;
@@ -2761,9 +2768,6 @@ progress {
     clip: rect(0 0 0 0);
     white-space: nowrap;
   }
-}
-.skip-link {
-  z-index: 40;
 }
 dialog {
   max-width: min(680px, calc(100vw - 32px));
@@ -4464,7 +4468,7 @@ window.__SWP_SITE__ = {
   },
   "options": {},
   "mode": "single",
-  "version": "3240cb994210",
+  "version": "1e45dce53ccc",
   "date": "2026-10-05",
   "assets": [],
   "workers": [
@@ -14118,6 +14122,9 @@ window.__SWP_SITE__ = {
       shareManual: "Copy this link manually:",
       assetSiteOnly: "Available on the hosted site only",
       supportLink: "Buy me a coffee",
+      devBuild: "Dev build",
+      redirectBlocked: "The server redirected the request elsewhere; it was not followed and nothing was sent further.",
+      serverGroup: "{purpose}: {n} servers (list from {source})",
       accessibility: "Accessibility",
       shortcutsToggle: "Single-key keyboard shortcuts",
       shortcutsHint: "Turn them off if you use voice control or a switch device: a spoken word could trigger them.",
@@ -14179,6 +14186,9 @@ window.__SWP_SITE__ = {
       shareManual: "Copiez ce lien manuellement :",
       assetSiteOnly: "Disponible uniquement sur le site en ligne",
       supportLink: "Offrez-moi un café",
+      devBuild: "Version de développement",
+      redirectBlocked: "Le serveur a redirigé la requête ailleurs ; elle n'a pas été suivie et rien n'a été envoyé plus loin.",
+      serverGroup: "{purpose} : {n} serveurs (liste issue de {source})",
       accessibility: "Accessibilité",
       shortcutsToggle: "Raccourcis clavier à une touche",
       shortcutsHint: "Désactivez-les si vous utilisez le contrôle vocal ou un contacteur : un mot prononcé pourrait les déclencher.",
@@ -14336,17 +14346,32 @@ window.__SWP_SITE__ = {
   }
 
   // node_modules/static-web-platform/src/services/network.ts
-  function createNetwork(consent2) {
+  var RedirectBlockedError = class extends Error {
+    origin;
+    constructor(origin) {
+      super(`${origin} answered with a redirect; it was not followed (nothing was sent further)`);
+      this.name = "RedirectBlockedError";
+      this.origin = origin;
+    }
+  };
+  function createNetwork(consent2, doFetch = (...args) => fetch(...args)) {
     const referrerOf = (origin) => consent2.declared()[origin]?.referrerPolicy ?? "no-referrer";
     return {
       async fetch(url, init = {}, options = {}) {
         const origin = new URL(url).origin;
         if (!await consent2.request(origin, options)) return null;
-        return fetch(url, { ...init, credentials: "omit", referrerPolicy: referrerOf(origin) });
+        const response = await doFetch(url, { ...init, credentials: "omit", referrerPolicy: referrerOf(origin), redirect: "manual" });
+        if (response.type === "opaqueredirect" || response.status >= 300 && response.status < 400) {
+          throw new RedirectBlockedError(origin);
+        }
+        return response;
       },
       async image(img, url, fallback, options = {}) {
         try {
           const origin = new URL(url).origin;
+          if (consent2.declared()[origin]?.scope === "request") {
+            throw new Error(`net.image() refuses ${origin}: declared "scope": "request" (use net.fetch with disclose)`);
+          }
           if (await consent2.request(origin, options)) {
             img.referrerPolicy = referrerOf(origin);
             img.onerror = () => img.replaceWith(fallback());
@@ -14542,6 +14567,10 @@ window.__SWP_SITE__ = {
       return { setStatus };
     }
     slot.append(privacy, accessibility, status);
+    if (site.mode === "dev") {
+      setStatus(t2("devBuild"));
+      return { setStatus };
+    }
     setStatus(t2("offlineCopy", { version: shortVersion(site.version), date: displayDate(site.date) }));
     if (site.siteUrl) {
       const runCheck = async () => {
@@ -14552,7 +14581,9 @@ window.__SWP_SITE__ = {
             "span",
             {},
             `${t2("updateAvailable")} (${displayDate(result.info.date)}) — `,
-            el("a", { href: result.downloadUrl, textContent: t2("updateDownload") })
+            // download: honoured only for same-origin links (not from file://);
+            // the server's Content-Disposition: attachment does the real work.
+            el("a", { href: result.downloadUrl, download: site.downloadName, textContent: t2("updateDownload") })
           );
           setStatus(wrap, true);
         } else if (result.kind === "failed") {
@@ -14630,21 +14661,37 @@ window.__SWP_SITE__ = {
       "ask": t2("stateAsk"),
       "per-request": t2("stateRequest")
     };
+    const originRow = (origin) => {
+      const state = consent2().state(origin);
+      const forget = button("forget", {
+        disabled: state === "ask" || state === "per-request",
+        onclick: () => {
+          consent2().forget(origin);
+          renderPrivacy();
+        }
+      });
+      forget.setAttribute("aria-label", `${t2("forget")} — ${origin}`);
+      return el("li", {}, el("span", {}, el("strong", { textContent: origin }), ` — ${stateLabel[state]}`), forget);
+    };
     const renderPrivacy = () => {
-      const origins = Object.keys(consent2().declared());
-      list.replaceChildren(...origins.map((origin) => {
-        const state = consent2().state(origin);
-        const forget = button("forget", {
-          disabled: state === "ask" || state === "per-request",
-          onclick: () => {
-            consent2().forget(origin);
-            renderPrivacy();
-          }
-        });
-        forget.setAttribute("aria-label", `${t2("forget")} — ${origin}`);
-        return el("li", {}, el("span", {}, el("strong", { textContent: origin }), ` — ${stateLabel[state]}`), forget);
+      const declared = consent2().declared();
+      const groups = /* @__PURE__ */ new Map();
+      const single = [];
+      for (const [origin, def] of Object.entries(declared)) {
+        if (def.group) groups.set(def.group, [...groups.get(def.group) ?? [], origin]);
+        else single.push(origin);
+      }
+      list.replaceChildren(...single.map(originRow), ...[...groups].map(([group, origins]) => {
+        const first = declared[origins[0] ?? ""];
+        const purpose = first ? purposeText(first.purpose, i18n.lang) : "";
+        return el("li", { className: "origin-group" }, el(
+          "details",
+          {},
+          el("summary", { textContent: t2("serverGroup", { purpose, n: origins.length, source: group }) }),
+          el("ul", { className: "origin-list" }, ...origins.map(originRow))
+        ));
       }));
-      if (!origins.length) list.append(el("li", { textContent: "—" }));
+      if (!single.length && !groups.size) list.append(el("li", { textContent: "—" }));
     };
     const privacyDialog = labelled(
       el(
@@ -18721,13 +18768,19 @@ window.__SWP_SITE__ = {
     { value: "time", label: "app.findTime", title: "app.findTimeTitle" },
     { value: "place", label: "app.findPlace", title: "app.findPlaceTitle" }
   ];
-  function mountModeTabs(slot, panel2, cases2) {
+  function mountModeTabs(slot, panel2, cases2, view2) {
     const tabs = MODES.map(
       (m) => h("button", { type: "button", role: "tab", id: `tab-${m.value}`, class: "mode-tab", "aria-controls": panel2.id, title: t(m.title) }, t(m.label))
     );
     const list = h("div", { role: "tablist", class: "mode-tabs", "aria-label": t("app.mode") }, tabs);
-    panel2.setAttribute("role", "tabpanel");
     const sync = () => {
+      slot.hidden = !view2.expert;
+      if (!view2.expert) {
+        panel2.removeAttribute("role");
+        panel2.removeAttribute("aria-labelledby");
+        return;
+      }
+      panel2.setAttribute("role", "tabpanel");
       MODES.forEach((m, i) => {
         const tab = tabs[i];
         if (!tab) return;
@@ -18752,6 +18805,7 @@ window.__SWP_SITE__ = {
       select(next, true);
     });
     cases2.subscribe((_s, structural) => structural && sync());
+    view2.subscribe(sync);
     sync();
     slot.replaceChildren(list);
   }
@@ -20097,6 +20151,7 @@ window.__SWP_SITE__ = {
       button.setAttribute("aria-expanded", String(open));
     });
     document.addEventListener("click", (e) => closeMenus(e.target));
+    document.addEventListener("focusin", (e) => closeMenus(e.target));
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closeMenus();
     });
@@ -20138,7 +20193,7 @@ window.__SWP_SITE__ = {
     exampleButtons: examples,
     focusField: inputs.focusField
   });
-  mountModeTabs(byId("mode-slot"), byId("workspace"), cases);
+  mountModeTabs(byId("mode-slot"), byId("workspace"), cases, view);
   mountExpertToggle(byId("expert-slot"), view);
   mountExamplesMenu(byId("examples-slot"), loadExample);
   mountShareMenu(byId("share-slot"), {

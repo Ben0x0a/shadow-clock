@@ -75,7 +75,7 @@ mountResults(byId("results"), {
   exampleButtons: examples,
   focusField: inputs.focusField,
 });
-mountModeTabs(byId("mode-slot"), byId("workspace"), cases);
+mountModeTabs(byId("mode-slot"), byId("workspace"), cases, view);
 mountExpertToggle(byId("expert-slot"), view);
 mountExamplesMenu(byId("examples-slot"), loadExample);
 mountShareMenu(byId("share-slot"), {

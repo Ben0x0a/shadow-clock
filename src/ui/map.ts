@@ -3,7 +3,7 @@
  *
  * Defines: tilesAllowed(), askForTiles(), onTilesChange(), mountSiteMap(), mountResultMap().
  * Used by: features/inputs/panels/site.ts, features/results/place/view.ts.
- * Depends on: Leaflet 1.9.4 (npm, pinned by the lockfile; ui/leaflet.css), the
+ * Depends on: Leaflet 1.9.4 (npm, pinned by the lockfile, with its stylesheet), the
  *             platform's consent gate (ui/context.ts), core/models.ts, ui/dom.ts.
  *
  * WHY the consent gate: every tile request tells the tile server which area is being
@@ -15,7 +15,7 @@
  */
 
 import * as L from "leaflet";
-import "./leaflet.css";
+import "leaflet/dist/leaflet.css";
 import type { GeoCell, GeoRegion } from "../core/models.ts";
 import { platform, t } from "./context.ts";
 import { h, icon, info } from "./dom.ts";

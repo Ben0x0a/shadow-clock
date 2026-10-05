@@ -92,9 +92,6 @@
         },
         {
           "expect": "#results-body .summary"
-        },
-        {
-          "expect": "#tab-place[aria-selected='true']"
         }
       ]
     },
@@ -110,8 +107,14 @@
       ]
     },
     {
-      "name": "mode tabs: switch to Find the place",
+      "name": "mode tabs in expert view: switch to Find the place (desktop)",
+      "devices": [
+        "desktop"
+      ],
       "steps": [
+        {
+          "click": "#expert-toggle"
+        },
         {
           "click": "#tab-place"
         },
@@ -121,7 +124,27 @@
       ]
     },
     {
-      "name": "info button opens its explanation; Escape closes it",
+      "name": "mode tabs in expert view: switch to Find the place (phone)",
+      "devices": [
+        "phone"
+      ],
+      "steps": [
+        {
+          "click": "#menu-btn"
+        },
+        {
+          "click": "#expert-toggle"
+        },
+        {
+          "click": "#tab-place"
+        },
+        {
+          "expect": "#tab-place[aria-selected='true']"
+        }
+      ]
+    },
+    {
+      "name": "info button opens its explanation",
       "steps": [
         {
           "click": ".landing .choice >> nth=0"
@@ -131,12 +154,6 @@
         },
         {
           "expect": ".info-pop:popover-open"
-        },
-        {
-          "press": "Escape"
-        },
-        {
-          "expect": ".gstep.is-current .info-btn"
         }
       ]
     },

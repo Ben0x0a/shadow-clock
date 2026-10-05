@@ -68,9 +68,12 @@ test("share links: the tool link carries no data", async ({ page, context, brows
   expect(other.url()).not.toContain("#");
 });
 
-test("mode switch keeps the page usable", async ({ page }) => {
+test("mode tabs appear in the expert view only and keep the page usable", async ({ page }) => {
   const errors = watchErrors(page);
   await loadExample(page, 0);
+  await expect(page.locator("#tab-place")).toBeHidden();
+  await openToolbar(page);
+  await page.locator("#expert-toggle").click();
   await page.locator("#tab-place").click();
   await expect(page.locator("#results-body")).toContainText(/Still needed|candidate area/);
   await page.locator("#tab-time").click();
@@ -86,6 +89,8 @@ test("no request leaves the site unless the user enables the map", async ({ page
   });
   for (const i of [0, 1, 2, 3]) await loadExample(page, i);
   await page.locator(".evidence > summary").click();
+  await openToolbar(page);
+  await page.locator("#expert-toggle").click();
   await page.locator("#tab-time").click();
   await expect(page.locator(".summary .headline")).toBeVisible({ timeout: 20_000 });
   expect(foreign).toEqual([]);
@@ -132,7 +137,7 @@ test("map tiles load only after consent, and only from the declared server", asy
   });
   page.on("request", (r) => {
     const u = new URL(r.url());
-    if (u.protocol.startsWith("http") && u.hostname !== "localhost" && u.hostname !== "tile.openstreetmap.org") foreign.push(r.url());
+    if (u.protocol.startsWith("http") && u.hostname !== "127.0.0.1" && u.hostname !== "tile.openstreetmap.org") foreign.push(r.url());
   });
   await page.goto("/");
   await page.locator(".choice").first().click();
