@@ -3,9 +3,9 @@
  * Used by: tests/*.test.ts.
  * Depends on: src/core/spa.ts, src/core/deltaT.ts, src/core/models.ts.
  */
-import { decimalYear, deltaTSeconds } from "../src/core/deltaT";
-import type { Atmosphere, Constraints, Shot } from "../src/core/models";
-import { sunPosition } from "../src/core/spa";
+import { decimalYear, deltaTSeconds } from "../src/core/deltaT.ts";
+import type { Atmosphere, Constraints, Shot } from "../src/core/models.ts";
+import { sunPosition } from "../src/core/spa.ts";
 
 export const ATM: Atmosphere = { pressureHpa: 1010, temperatureC: 10, refraction: true };
 

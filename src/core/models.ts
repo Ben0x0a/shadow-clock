@@ -4,9 +4,21 @@
  * Defines: measurement inputs (one Shot per shadow), the derived Observation, site and
  *          atmosphere, constraints, display zones, and request/result types for the
  *          time solver, the location solver and the claimed-time check.
- * Used by: every module under core/, worker.ts, ui/*.
+ * Used by: every module under core/, workers/solver.ts, ui/*.
  * Depends on: nothing (types only).
  */
+
+/**
+ * A user-facing message as a key into the UI string table (strings.ts) plus values.
+ * WHY keys: the core also runs inside the Web Worker, where the UI's t() does not exist;
+ * the UI translates with tm(). A value may itself be a Message (e.g. a field name).
+ */
+export interface Message {
+  key: string;
+  vars?: Record<string, string | number | Message>;
+  /** Label of the shadow the message is about, shown as a prefix. */
+  shot?: string;
+}
 
 /** A measured quantity: either a Gaussian (value ± 1σ) or a hard range [min, max]. */
 export type Uncertain =
@@ -64,6 +76,7 @@ export type Component =
 
 /** One line of the error budget (all values in degrees). */
 export interface BudgetItem {
+  /** String-table key of the term's name (strings.ts). */
   label: string;
   /** 1σ for Gaussian components, half-width for range components. */
   amount: number;
@@ -77,7 +90,7 @@ export interface Observation {
   azimuth: Component | null;
   elevationBudget: BudgetItem[];
   azimuthBudget: BudgetItem[];
-  warnings: string[];
+  warnings: Message[];
 }
 
 export interface Site {
@@ -198,7 +211,7 @@ export interface TimeSolveResult {
   clusters: Cluster[];
   heatmap: Heatmap | null;
   observations: Observation[];
-  warnings: string[];
+  warnings: Message[];
   evaluations: number;
   elapsedMs: number;
 }
@@ -238,7 +251,7 @@ export interface LocationSolveResult {
   regions: GeoRegion[];
   resolutionDeg: number;
   observations: Observation[];
-  warnings: string[];
+  warnings: Message[];
   evaluations: number;
   elapsedMs: number;
 }

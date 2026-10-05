@@ -12,6 +12,8 @@
  * not do; bisection on a monotonic CDF is simple and exact to machine precision.
  */
 
+import { at } from "./util.ts";
+
 function lnGamma(z: number): number {
   // Lanczos approximation (g = 7, n = 9), relative accuracy ~1e-15.
   const c = [
@@ -21,9 +23,9 @@ function lnGamma(z: number): number {
   ];
   if (z < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - lnGamma(1 - z);
   const x = z - 1;
-  let a = c[0];
+  let a = at(c, 0);
   const t = x + 7.5;
-  for (let i = 1; i < 9; i++) a += c[i] / (x + i);
+  for (let i = 1; i < 9; i++) a += at(c, i) / (x + i);
   return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
 }
 

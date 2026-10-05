@@ -2,9 +2,10 @@
  * solveTime.test.ts — round-trip tests of the time solver on synthetic shadows.
  * Depends on: src/core/solveTime.ts, tests/helpers.ts.
  */
-import { describe, expect, it } from "vitest";
-import { solveTime } from "../src/core/solveTime";
-import { ATM, constraintsFor, syntheticShot } from "./helpers";
+import { describe, it } from "node:test";
+import { expect } from "./expect.ts";
+import { solveTime } from "../src/core/solveTime.ts";
+import { ATM, constraintsFor, syntheticShot } from "./helpers.ts";
 
 const LAT = 48.8566;
 const LON = 2.3522;
@@ -24,7 +25,7 @@ function solve(shots = [shot(0.3, 1)], extra = {}) {
     shots, site: { lat: LAT, lon: LON, heightM: 0, radiusM: 0 }, atmosphere: ATM,
     constraints: constraintsFor(2025, extra), deltaTOverride: null,
   });
-  if (!r.ok) throw new Error(r.error);
+  if (!r.ok) throw new Error(JSON.stringify(r.error));
   return r.result;
 }
 

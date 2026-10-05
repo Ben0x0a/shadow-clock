@@ -4,7 +4,7 @@
  * Defines: Scorer (joint fit of all shots at one candidate), levelThreshold(),
  *          acceptedLevel().
  * Used by: core/solveTime.ts, core/solveLocation.ts, core/claimCheck.ts.
- * Depends on: core/spa.ts, core/stats.ts, core/models.ts, core/config.ts.
+ * Depends on: core/spa.ts, core/stats.ts, core/models.ts, core/config.ts, core/util.ts.
  *
  * HOW: for each shot, compute the apparent Sun position from the shot's geocentric
  * ephemeris, then the residuals against the observed components.
@@ -23,10 +23,11 @@
  * create, instead of pretending the two axes are independent.
  */
 
-import { CONFIDENCE_LEVELS, EARTH_RADIUS_M, HEATMAP_LEVEL } from "./config";
-import type { Atmosphere, Component, Fit, Observation, ShotFit } from "./models";
-import { angleDiff, type GeocentricSun, topocentricSun } from "./spa";
-import { chi2Quantile } from "./stats";
+import { CONFIDENCE_LEVELS, EARTH_RADIUS_M, HEATMAP_LEVEL } from "./config.ts";
+import type { Atmosphere, Component, Fit, Observation, ShotFit } from "./models.ts";
+import { angleDiff, type GeocentricSun, topocentricSun } from "./spa.ts";
+import { chi2Quantile } from "./stats.ts";
+import { at } from "./util.ts";
 
 /** Earth rotation relative to the Sun's hour angle, degrees of sidereal time per second. */
 const SIDEREAL_DEG_PER_S = 360.98564736629 / 86400;
@@ -65,12 +66,14 @@ export interface FullFit extends Fit {
 export class Scorer {
   readonly dof: number;
   private readonly thrHeat: number;
+  private readonly shots: ScoredShot[];
+  private readonly atm: Atmosphere;
+  private readonly heightM: number;
 
-  constructor(
-    private readonly shots: ScoredShot[],
-    private readonly atm: Atmosphere,
-    private readonly heightM: number,
-  ) {
+  constructor(shots: ScoredShot[], atm: Atmosphere, heightM: number) {
+    this.shots = shots;
+    this.atm = atm;
+    this.heightM = heightM;
     let dof = 0;
     for (const s of shots) {
       if (s.obs.elevation.kind === "gauss") dof++;
@@ -96,8 +99,8 @@ export class Scorer {
     const cosLat = Math.max(Math.cos((lat * Math.PI) / 180), 1e-6);
 
     for (let i = 0; i < this.shots.length; i++) {
-      const { obs, timeSigmaS } = this.shots[i];
-      const geo = geos[i];
+      const { obs, timeSigmaS } = at(this.shots, i);
+      const geo = at(geos, i);
       const s0 = this.sun(geo, lat, lon);
       const rEl = s0.elevation - obs.elevation.centre;
       const rAz = obs.azimuth ? angleDiff(s0.azimuth, obs.azimuth.centre) : 0;
@@ -137,13 +140,15 @@ export class Scorer {
 
       const varT = timeSigmaS ** 2;
       const varP = (radiusM / 2) ** 2;
-      if (comps.length === 1) {
-        const { c, r, d } = comps[0];
+      const [first, second] = comps;
+      if (first && !second) {
+        const { c, r, d } = first;
         const v = c.sigma ** 2 + d[0] ** 2 * varT + (d[1] ** 2 + d[2] ** 2) * varP;
         chi2 += (r * r) / v;
         logL += -0.5 * (r * r) / v - 0.5 * Math.log(v);
-      } else if (comps.length === 2) {
-        const [a, b] = comps;
+      } else if (first && second) {
+        const a = first;
+        const b = second;
         const caa = a.c.sigma ** 2 + a.d[0] ** 2 * varT + (a.d[1] ** 2 + a.d[2] ** 2) * varP;
         const cbb = b.c.sigma ** 2 + b.d[0] ** 2 * varT + (b.d[1] ** 2 + b.d[2] ** 2) * varP;
         const cab = a.d[0] * b.d[0] * varT + (a.d[1] * b.d[1] + a.d[2] * b.d[2]) * varP;
@@ -186,7 +191,7 @@ export class Scorer {
    * units; the great-circle distance is at most |Δel| + |Δaz|·cos(el).
    */
   searchRadius(i: number, thr: number, radiusM: number, rateDegPerS: number): number {
-    const { obs, timeSigmaS } = this.shots[i];
+    const { obs, timeSigmaS } = at(this.shots, i);
     const extra = rateDegPerS * timeSigmaS + (radiusM / EARTH_RADIUS_M) * (180 / Math.PI);
     const k = Math.sqrt(thr);
     const part = (c: Component) =>
@@ -196,7 +201,7 @@ export class Scorer {
 
   /** Cheap distance used by the coarse search (see searchRadius). */
   coarseDistance(i: number, geo: GeocentricSun, lat: number, lon: number): number {
-    const obs = this.shots[i].obs;
+    const obs = at(this.shots, i).obs;
     const s = this.sun(geo, lat, lon);
     if (!obs.azimuth) return Math.abs(s.elevation - obs.elevation.centre);
     const r = Math.PI / 180;

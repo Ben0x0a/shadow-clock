@@ -2,17 +2,22 @@
 
 ## Run it
 
+Use the hosted site, or install it (*Install* in the toolbar), or keep the single-file
+copy (*Download*) for offline machines. To build locally:
+
 ```sh
-npm ci && npm run dev
+git submodule update --init                 # the platform (platform/)
+mise exec -- npm ci && mise exec -- npx swp build
+mise exec -- npx swp serve                  # then open http://127.0.0.1:8765
 ```
 
-Or open the deployed site. No account, no server: the page works offline once loaded (map
-tiles excepted).
+No account, no server-side processing: everything runs in your browser. Map tiles are the
+only external requests, and only after you allow them.
 
 ## A first case in time mode
 
 The guided view asks one question at a time; finished steps collapse to a one-line summary
-you can edit. Switch on **Expert view** in the top bar to see every option at once.
+you can edit. Switch on **Expert** in the top bar to see every option at once.
 
 1. **Where was the photo taken?** Paste coordinates in any usual form (`48.8584, 2.2945`,
    DMS, or a Google Maps / OpenStreetMap link) and say how precisely you know the place
@@ -46,10 +51,11 @@ two or more at different times cross into small areas.
 ## Sharing and exporting
 
 - **Share → Copy link to the tool** gives a clean link with no data, safe to post anywhere.
-- **Share → Copy link to this calculation** gives a link whose `#fragment` holds the whole
-  case. Browsers never send the fragment to servers, but anyone with the link can read it.
-  When such a link is opened, the case is loaded and the data is removed from the address
-  bar at once. The address bar never shows case data otherwise, so copying the URL or
+- **Share → Share this calculation…** first shows a warning listing exactly what the link
+  contains, then copies a link whose `#fragment` holds the whole case. Browsers never send
+  the fragment to servers, but anyone with the link can read it. When such a link is
+  opened, the case is validated, loaded, and the data is removed from the address bar at
+  once. The address bar never shows case data otherwise, so copying the URL or
   bookmarking the page cannot leak it. The working case survives a reload through the tab's
   session storage, which stays on the device and is cleared when the tab closes.
 - **Export → Download report** writes `<timestamp>.shadowclock.report.json` (see

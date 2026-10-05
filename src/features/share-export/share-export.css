@@ -1,0 +1,9 @@
+/*
+ * share-export.css — the share menu (shared .menu styles) and the print header.
+ * Used by: features/share-export/menu.ts.
+ * Depends on: app.css tokens.
+ */
+
+#share-list {
+  min-width: min(320px, calc(100vw - 32px));
+}

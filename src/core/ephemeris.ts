@@ -17,8 +17,8 @@
  * below the SPA's own ±0.0003°, and it speeds up the solvers by roughly 10×.
  */
 
-import { decimalYear, deltaTSeconds } from "./deltaT";
-import { angleDiff, type GeocentricSun, geocentricSun, julianDay, norm360 } from "./spa";
+import { decimalYear, deltaTSeconds } from "./deltaT.ts";
+import { angleDiff, type GeocentricSun, geocentricSun, julianDay, norm360 } from "./spa.ts";
 
 const NODE_MS = 3_600_000;
 const ROT_DEG_PER_DAY = 360.98564736629;
@@ -39,7 +39,11 @@ export class Ephemeris {
   private readonly nodes = new Map<number, Node>();
   exactEvaluations = 0;
 
-  constructor(private readonly deltaTOverride: number | null) {}
+  private readonly deltaTOverride: number | null;
+
+  constructor(deltaTOverride: number | null) {
+    this.deltaTOverride = deltaTOverride;
+  }
 
   private node(k: number): Node {
     const hit = this.nodes.get(k);

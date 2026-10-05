@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<!--
+  index.html — page shell of ShadowClock. Not served as is: the platform build
+  (npx swp build) turns it into public/index.html (site) and the single-file download.
+
+  Defines : the static landmarks and slots. BUILD:HEAD receives the CSP, title, icons
+            and styles; BUILD:BODY the config and the app bundle.
+  Used by : swp build.
+  Uses    : the platform fills #app-actions (install / download / updates / privacy /
+            accessibility / status) and adds its dialogs; main.ts fills every slot
+            through the features and puts the support link in #app-footer.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="x-dns-prefetch-control" content="off">
+<meta name="theme-color" content="#184f95">
+<title>ShadowClock</title>
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<a class="skip-link" href="#main" id="skip-link"></a>
+<div id="print-header" class="print-only"></div>
+<header class="topbar" id="topbar" data-swp-sticky>
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="22" cy="9" r="5" class="logo-sun"></circle>
+      <path d="M9 27V11" class="logo-pole"></path>
+      <path d="M9 27h18" class="logo-shadow"></path>
+    </svg>
+    <div>
+      <h1 id="app-title"></h1>
+      <p class="tagline" id="tagline"></p>
+    </div>
+  </div>
+  <nav id="mode-slot" class="mode-switch"></nav>
+  <button type="button" class="btn ghost icon-only menu-btn" id="menu-btn"></button>
+  <div class="actions" id="toolbar">
+    <div id="expert-slot"></div>
+    <div id="examples-slot"></div>
+    <div id="share-slot"></div>
+    <div id="help-slot"></div>
+    <div id="app-actions"></div>
+  </div>
+</header>
+
+<main id="main" tabindex="-1">
+  <div id="workspace" class="layout">
+    <section class="inputs" id="inputs"></section>
+    <section class="results" id="results" aria-labelledby="results-h" tabindex="-1"></section>
+  </div>
+</main>
+
+<footer class="footer" id="app-footer"><p id="footer-text"></p></footer>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

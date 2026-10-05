@@ -1,0 +1,343 @@
+{
+  "scenarios": [
+    {
+      "name": "choose Find the time: first guided step",
+      "steps": [
+        {
+          "click": ".landing .choice >> nth=0"
+        },
+        {
+          "expect": ".gstep.is-current .gstep-body input"
+        }
+      ]
+    },
+    {
+      "name": "guided: continue to the shadow step",
+      "steps": [
+        {
+          "click": ".landing .choice >> nth=0"
+        },
+        {
+          "fill": [
+            ".gstep.is-current [data-field='site.loc']",
+            "48.8584, 2.2945"
+          ]
+        },
+        {
+          "click": ".gstep.is-current .gstep-actions .btn"
+        },
+        {
+          "expect": ".gstep.is-current .shot-card, .gstep.is-current .shot-flat"
+        }
+      ]
+    },
+    {
+      "name": "choose Find the place: first guided step",
+      "steps": [
+        {
+          "click": ".landing .choice >> nth=1"
+        },
+        {
+          "expect": ".gstep.is-current .gstep-body"
+        }
+      ]
+    },
+    {
+      "name": "time example: answer shown",
+      "steps": [
+        {
+          "click": ".landing .example-buttons button >> nth=0"
+        },
+        {
+          "expect": "#results-body .summary .headline"
+        }
+      ]
+    },
+    {
+      "name": "time example: evidence opened",
+      "steps": [
+        {
+          "click": ".landing .example-buttons button >> nth=0"
+        },
+        {
+          "expect": "#results-body .summary .headline"
+        },
+        {
+          "click": "#results-body .evidence-toggle >> nth=0"
+        },
+        {
+          "expect": "#results-body details.evidence[open]"
+        }
+      ]
+    },
+    {
+      "name": "time example: claimed time checked",
+      "steps": [
+        {
+          "click": ".landing .example-buttons button >> nth=0"
+        },
+        {
+          "expect": "#results-body .summary .headline"
+        },
+        {
+          "expect": ".claim-card[open] .claim-out .verdict"
+        }
+      ]
+    },
+    {
+      "name": "place example: candidate areas shown",
+      "steps": [
+        {
+          "click": ".landing .example-buttons button >> nth=3"
+        },
+        {
+          "expect": "#results-body .summary"
+        },
+        {
+          "expect": "#tab-place[aria-selected='true']"
+        }
+      ]
+    },
+    {
+      "name": "high-latitude example: elevation-only answer",
+      "steps": [
+        {
+          "click": ".landing .example-buttons button >> nth=2"
+        },
+        {
+          "expect": "#results-body .summary .headline"
+        }
+      ]
+    },
+    {
+      "name": "mode tabs: switch to Find the place",
+      "steps": [
+        {
+          "click": "#tab-place"
+        },
+        {
+          "expect": "#tab-place[aria-selected='true']"
+        }
+      ]
+    },
+    {
+      "name": "info button opens its explanation; Escape closes it",
+      "steps": [
+        {
+          "click": ".landing .choice >> nth=0"
+        },
+        {
+          "click": ".gstep.is-current .info-btn >> nth=0"
+        },
+        {
+          "expect": ".info-pop:popover-open"
+        },
+        {
+          "press": "Escape"
+        },
+        {
+          "expect": ".gstep.is-current .info-btn"
+        }
+      ]
+    },
+    {
+      "name": "map: consent asked, denied, the app still works",
+      "steps": [
+        {
+          "click": ".landing .choice >> nth=0"
+        },
+        {
+          "click": ".map-consent .btn"
+        },
+        {
+          "expect": "#consent-dialog[open] #consent-origin"
+        },
+        {
+          "consent": "deny"
+        },
+        {
+          "expect": ".map-consent .btn"
+        }
+      ]
+    },
+    {
+      "name": "map: allowed for the session, tiles shown",
+      "steps": [
+        {
+          "click": ".landing .choice >> nth=0"
+        },
+        {
+          "click": ".map-consent .btn"
+        },
+        {
+          "expect": "#consent-dialog[open]"
+        },
+        {
+          "consent": "session"
+        },
+        {
+          "expect": ".leaflet-container"
+        }
+      ]
+    },
+    {
+      "name": "expert view (desktop)",
+      "devices": [
+        "desktop"
+      ],
+      "steps": [
+        {
+          "click": "#expert-toggle"
+        },
+        {
+          "expect": "#p-site-h"
+        }
+      ]
+    },
+    {
+      "name": "expert view (phone)",
+      "devices": [
+        "phone"
+      ],
+      "steps": [
+        {
+          "click": "#menu-btn"
+        },
+        {
+          "click": "#expert-toggle"
+        },
+        {
+          "expect": "#p-site-h"
+        }
+      ]
+    },
+    {
+      "name": "phone menu opened",
+      "devices": [
+        "phone"
+      ],
+      "steps": [
+        {
+          "click": "#menu-btn"
+        },
+        {
+          "expect": "#toolbar #help-btn"
+        }
+      ]
+    },
+    {
+      "name": "examples menu opened (desktop)",
+      "devices": [
+        "desktop"
+      ],
+      "steps": [
+        {
+          "click": "#examples-menu > summary"
+        },
+        {
+          "expect": "#examples-list"
+        }
+      ]
+    },
+    {
+      "name": "share and export menu opened (desktop)",
+      "devices": [
+        "desktop"
+      ],
+      "steps": [
+        {
+          "click": ".landing .example-buttons button >> nth=0"
+        },
+        {
+          "expect": "#results-body .summary .headline"
+        },
+        {
+          "click": "#share-summary"
+        },
+        {
+          "expect": "#share-list"
+        }
+      ]
+    },
+    {
+      "name": "share the calculation: warning lists the contents (desktop)",
+      "devices": [
+        "desktop"
+      ],
+      "steps": [
+        {
+          "click": ".landing .example-buttons button >> nth=0"
+        },
+        {
+          "expect": "#results-body .summary .headline"
+        },
+        {
+          "click": "#share-summary"
+        },
+        {
+          "click": "#share-calc"
+        },
+        {
+          "expect": "#share-dialog[open]"
+        }
+      ]
+    },
+    {
+      "name": "share the calculation (phone)",
+      "devices": [
+        "phone"
+      ],
+      "steps": [
+        {
+          "click": ".landing .example-buttons button >> nth=0"
+        },
+        {
+          "expect": "#results-body .summary .headline"
+        },
+        {
+          "click": "#menu-btn"
+        },
+        {
+          "click": "#share-summary"
+        },
+        {
+          "click": "#share-calc"
+        },
+        {
+          "expect": "#share-dialog[open]"
+        }
+      ]
+    },
+    {
+      "name": "help dialog (desktop)",
+      "devices": [
+        "desktop"
+      ],
+      "steps": [
+        {
+          "click": "#help-btn"
+        },
+        {
+          "expect": "#help[open]"
+        }
+      ]
+    },
+    {
+      "name": "help dialog (phone)",
+      "devices": [
+        "phone"
+      ],
+      "steps": [
+        {
+          "click": "#menu-btn"
+        },
+        {
+          "click": "#help-btn"
+        },
+        {
+          "expect": "#help[open]"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+/*
+ * help.css — the help dialog (general dialog styles are in app.css).
+ * Used by: features/help/help.ts.
+ * Depends on: app.css tokens.
+ */
+
+#help {
+  line-height: 1.55;
+}
+#help .dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}

@@ -1,7 +1,7 @@
 /**
  * zone.ts — time-zone arithmetic for constraints and display.
  *
- * Defines: zoneOffsetMin(), wallParts(), wallToUtc(), zoneLabel().
+ * Defines: zoneOffsetMin(), wallParts(), wallToUtc(), formatOffset(), isValidIana().
  * Used by: core/solveTime.ts (constraints, heatmap rows), ui/format.ts (display).
  * Depends on: core/models.ts.
  *
@@ -13,7 +13,7 @@
  * such as "taken in the afternoon" must be interpreted in the analyst's chosen zone.
  */
 
-import type { Zone } from "./models";
+import type { Zone } from "./models.ts";
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
 const offsetCache = new Map<string, number>();
@@ -37,11 +37,11 @@ function ianaOffsetMin(name: string, ms: number): number {
     });
     formatters.set(name, f);
   }
-  const p: Record<string, number> = {};
+  const p: Partial<Record<Intl.DateTimeFormatPartTypes, number>> = {};
   for (const part of f.formatToParts(ms)) {
     if (part.type !== "literal") p[part.type] = Number(part.value);
   }
-  const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+  const asUtc = Date.UTC(p.year ?? NaN, (p.month ?? NaN) - 1, p.day ?? NaN, p.hour ?? NaN, p.minute ?? NaN, p.second ?? NaN);
   const off = Math.round((asUtc - Math.floor(ms / 1000) * 1000) / 60_000);
   // WHY: bound the cache so a multi-decade solve cannot grow memory without limit.
   if (offsetCache.size > 400_000) offsetCache.clear();
@@ -108,17 +108,4 @@ export function formatOffset(min: number): string {
   const sign = min < 0 ? "−" : "+";
   const a = Math.abs(Math.round(min));
   return `${sign}${String(Math.floor(a / 60)).padStart(2, "0")}:${String(a % 60).padStart(2, "0")}`;
-}
-
-export function zoneLabel(zone: Zone): string {
-  switch (zone.kind) {
-    case "utc":
-      return "UTC";
-    case "offset":
-      return `UTC${formatOffset(zone.minutes)}`;
-    case "solar":
-      return "Local mean solar time";
-    case "iana":
-      return zone.name;
-  }
 }

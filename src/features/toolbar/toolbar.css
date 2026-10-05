@@ -1,0 +1,10 @@
+/*
+ * toolbar.css — the phone Menu button (the folding itself is in app.css, with the header layout).
+ * Used by: features/toolbar/toolbar.ts.
+ * Depends on: app.css tokens.
+ */
+
+.menu-btn {
+  min-width: 44px;
+  min-height: 44px;
+}

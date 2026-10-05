@@ -2,7 +2,7 @@
  * claimCheck.ts — tests a claimed timestamp (e.g. EXIF DateTimeOriginal) against the shadows.
  *
  * Defines: checkClaim().
- * Used by: worker.ts, tests/claimCheck.test.ts.
+ * Used by: workers/solver.ts, tests/claimCheck.test.ts.
  * Depends on: core/score.ts, core/solveTime.ts (prepareShots), core/ephemeris.ts,
  *             core/config.ts, core/models.ts.
  *
@@ -15,19 +15,20 @@
  * which is often the forensic question itself.
  */
 
-import { OFFSET_SCAN_STEP_MIN } from "./config";
-import { Ephemeris } from "./ephemeris";
-import type { ClaimOffsetResult, ClaimRequest, ClaimResult } from "./models";
-import { acceptedLevel, type ScoredShot, Scorer } from "./score";
-import { prepareShots, type SolveOutcome } from "./solveTime";
+import { OFFSET_SCAN_STEP_MIN } from "./config.ts";
+import { Ephemeris } from "./ephemeris.ts";
+import type { ClaimOffsetResult, ClaimRequest, ClaimResult } from "./models.ts";
+import { acceptedLevel, type ScoredShot, Scorer } from "./score.ts";
+import { prepareShots, type SolveOutcome } from "./solveTime.ts";
+import { at } from "./util.ts";
 
 export function checkClaim(req: ClaimRequest): SolveOutcome<ClaimResult> {
-  if (!Number.isFinite(req.wallClockMs)) return { ok: false, error: "Enter the claimed date and time" };
+  if (!Number.isFinite(req.wallClockMs)) return { ok: false, error: { key: "core.err.claimMissing" } };
   const prep = prepareShots(req.shots, req.atmosphere);
   if (!prep.ok) return prep;
   const scored: ScoredShot[] = prep.observations.map((obs, i) => ({
     obs,
-    timeSigmaS: i === 0 ? 0 : req.shots[i].timeSigmaS,
+    timeSigmaS: i === 0 ? 0 : at(req.shots, i).timeSigmaS,
   }));
   const scorer = new Scorer(scored, req.atmosphere, req.site.heightM);
   const eph = new Ephemeris(req.deltaTOverride);

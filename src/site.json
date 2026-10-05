@@ -1,0 +1,26 @@
+{
+  "id": "shadowclock",
+  "title": "ShadowClock",
+  "shortName": "ShadowClock",
+  "lang": "en",
+  "themeColor": "#184f95",
+  "siteUrl": "https://shadow-clock.forandchips.com/",
+  "downloadName": "shadowclock.html",
+  "support": {
+    "url": "https://buymeacoffee.com/forandchips"
+  },
+  "entry": "src/main.ts",
+  "netOrigins": {
+    "https://tile.openstreetmap.org": {
+      "directive": "img-src",
+      "purpose": "Show map tiles from OpenStreetMap. The tile server also learns which area you look at.",
+      "scope": "origin",
+      "referrerPolicy": "strict-origin"
+    }
+  },
+  "workers": {
+    "solver": "src/workers/solver.ts"
+  },
+  "options": {},
+  "themeSwitch": true
+}

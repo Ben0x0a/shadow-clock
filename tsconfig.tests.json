@@ -1,0 +1,15 @@
+{
+  "//": "Type-checks the unit tests (Node test runner) \u2014 separate so app code cannot use Node globals.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "e2e/**/*.ts",
+    "playwright.config.ts"
+  ]
+}

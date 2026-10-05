@@ -1,0 +1,59 @@
+/*
+ * claim.css — claimed-time verdict and UTC-offset strip.
+ * Used by: features/claim/claim.ts.
+ * Depends on: app.css tokens (and the platform's base.css).
+ */
+
+/* ---- Claim check --------------------------------------------------------------------- */
+.verdict {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+}
+.verdict p {
+  margin: 2px 0 0;
+}
+.verdict.good {
+  background: var(--good-wash);
+}
+.verdict.good > svg {
+  color: var(--good);
+  flex: none;
+}
+.verdict.bad {
+  background: var(--bad-wash);
+}
+.verdict.bad > svg {
+  color: var(--bad);
+  flex: none;
+}
+.offset-strip {
+  display: flex;
+  gap: 1px;
+  margin-top: 8px;
+  height: 18px;
+}
+.offset-strip .cell {
+  flex: 1;
+  border-radius: 2px;
+  background: var(--grid);
+}
+.offset-strip .lv-1 { background: var(--heat-1); }
+.offset-strip .lv-2 { background: var(--heat-2); }
+.offset-strip .lv-3 { background: var(--heat-3); }
+.offset-ticks {
+  position: relative;
+  height: 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.offset-ticks span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+.offset-ticks span:first-child {
+  transform: none;
+}
+

@@ -2,7 +2,7 @@
  * solveLocation.ts — location mode: shadows with known UTC times → compatible places.
  *
  * Defines: solveLocation().
- * Used by: worker.ts, tests/solveLocation.test.ts.
+ * Used by: workers/solver.ts, tests/solveLocation.test.ts.
  * Depends on: core/score.ts, core/solveTime.ts (prepareShots), core/spa.ts, core/deltaT.ts,
  *             core/config.ts, core/models.ts.
  *
@@ -23,12 +23,13 @@
  * the place. A grid represents such bands and their intersections without special cases.
  */
 
-import { ACCEPT_LEVEL, EARTH_RADIUS_M, SUN_MAX_RATE_DEG_PER_MIN } from "./config";
-import { decimalYear, deltaTSeconds } from "./deltaT";
-import type { GeoCell, GeoRegion, LocationSolveRequest, LocationSolveResult } from "./models";
-import { type FullFit, levelThreshold, type ScoredShot, Scorer } from "./score";
-import { type Progress, prepareShots, type SolveOutcome } from "./solveTime";
-import { geocentricSun } from "./spa";
+import { ACCEPT_LEVEL, EARTH_RADIUS_M, SUN_MAX_RATE_DEG_PER_MIN } from "./config.ts";
+import { decimalYear, deltaTSeconds } from "./deltaT.ts";
+import type { GeoCell, GeoRegion, LocationSolveRequest, LocationSolveResult, Message } from "./models.ts";
+import { type FullFit, levelThreshold, type ScoredShot, Scorer } from "./score.ts";
+import { type Progress, prepareShots, type SolveOutcome } from "./solveTime.ts";
+import { geocentricSun } from "./spa.ts";
+import { at } from "./util.ts";
 
 const SUBDIVIDE = 5;
 const MAX_CELLS = 250_000;
@@ -41,14 +42,14 @@ export function solveLocation(
 ): SolveOutcome<LocationSolveResult> {
   const t0 = Date.now();
   for (const s of req.shots) {
-    if (!Number.isFinite(s.timeMs)) return { ok: false, error: `${s.label}: the date and time are missing` };
-    if (!(s.timeSigmaS >= 0)) return { ok: false, error: `${s.label}: invalid time uncertainty` };
+    if (!Number.isFinite(s.timeMs)) return { ok: false, error: { key: "core.err.timeMissing", shot: s.label } };
+    if (!(s.timeSigmaS >= 0)) return { ok: false, error: { key: "core.err.timeTolerance", shot: s.label } };
   }
   const prep = prepareShots(req.shots, req.atmosphere);
   if (!prep.ok) return prep;
   const observations = prep.observations;
 
-  const scored: ScoredShot[] = observations.map((obs, i) => ({ obs, timeSigmaS: req.shots[i].timeSigmaS }));
+  const scored: ScoredShot[] = observations.map((obs, i) => ({ obs, timeSigmaS: at(req.shots, i).timeSigmaS }));
   const scorer = new Scorer(scored, req.atmosphere, req.heightM);
   const geos = req.shots.map((s) =>
     geocentricSun(s.timeMs, req.deltaTOverride ?? deltaTSeconds(decimalYear(s.timeMs))),
@@ -63,14 +64,14 @@ export function solveLocation(
   const target = Math.min(1, Math.max(MIN_RES_DEG, tightest / 8));
 
   const [south, west, north, east] = req.bounds ?? [-90, -180, 90, 180];
-  if (!(south < north) || !(west < east)) return { ok: false, error: "Search area is empty" };
+  if (!(south < north) || !(west < east)) return { ok: false, error: { key: "core.err.emptyArea" } };
 
   let evaluations = 0;
   const survives = (lat: number, lon: number, size: number): boolean => {
     const half = size * 0.75; // ≥ half-diagonal in great-circle degrees
     for (let i = 0; i < geos.length; i++) {
       evaluations++;
-      if (scorer.coarseDistance(i, geos[i], lat, lon) > radii[i] + half) return false;
+      if (scorer.coarseDistance(i, at(geos, i), lat, lon) > at(radii, i) + half) return false;
     }
     return true;
   };
@@ -83,14 +84,14 @@ export function solveLocation(
       if (survives(lat, lon, size)) cells.push([lat, lon]);
     }
   }
-  const warnings: string[] = [];
+  const warnings: Message[] = [];
   let level = 0;
   while (size > target * 1.001 && cells.length > 0) {
     const next = size / SUBDIVIDE;
     // WHY: stop refining before memory and time explode; the result stays correct (a
     // superset of the true region), only coarser, and the user is told.
     if (cells.length * SUBDIVIDE * SUBDIVIDE > MAX_CELLS * 4) {
-      warnings.push(`Result shown at ${size.toFixed(2)}° resolution: the candidate area is too large to refine further. Narrow the search area or add shadows.`);
+      warnings.push({ key: "core.warn.coarse", vars: { size: size.toFixed(2) } });
       break;
     }
     const out: [number, number][] = [];
@@ -106,7 +107,7 @@ export function solveLocation(
     }
     cells = out;
     size = next;
-    progress?.(Math.min(0.8, 0.2 * ++level), "Refining the map");
+    progress?.(Math.min(0.8, 0.2 * ++level), { key: "progress.map" });
   }
 
   // Final scoring.
@@ -116,17 +117,17 @@ export function solveLocation(
     evaluations++;
     if (fit.rangeU <= 1 && (scorer.dof === 0 || fit.chi2 <= thr)) accepted.push({ lat, lon, fit });
   }
-  progress?.(0.9, "Grouping regions");
+  progress?.(0.9, { key: "progress.regions" });
 
   const regions = groupRegions(accepted, size);
   const out: GeoCell[] = accepted.map((c) => ({ lat: c.lat, lon: c.lon, size, misfit: c.fit.misfit }));
 
-  observations.forEach((o, i) => o.warnings.forEach((x) => warnings.push(`${req.shots[i].label}: ${x}`)));
+  observations.forEach((o, i) => o.warnings.forEach((x) => warnings.push({ ...x, shot: at(req.shots, i).label })));
   if (accepted.length === 0) {
-    warnings.push("No place on Earth matches all shadows at the given times. Check the times (UTC!), the north reference and the uncertainties.");
+    warnings.push({ key: "core.warn.noPlace" });
   }
-  if (req.shots.length === 1 && !observations[0].azimuth) {
-    warnings.push("A single shadow without azimuth only gives a ring of possible places. Add the shadow direction or a second shadow at another time.");
+  if (req.shots.length === 1 && !at(observations, 0).azimuth) {
+    warnings.push({ key: "core.warn.ring" });
   }
 
   return {
@@ -158,7 +159,7 @@ function groupRegions(cells: { lat: number; lon: number; fit: FullFit }[], size:
     while (stack.length) {
       const i = stack.pop() as number;
       members.push(i);
-      const { lat, lon } = cells[i];
+      const { lat, lon } = at(cells, i);
       for (let a = -1; a <= 1; a++) {
         for (let b = -1; b <= 1; b++) {
           const j = index.get(key(lat + a * size, lon + b * size));
@@ -169,11 +170,11 @@ function groupRegions(cells: { lat: number; lon: number; fit: FullFit }[], size:
         }
       }
     }
-    let best = members[0];
+    let best = at(members, 0);
     let s0 = 90, w0 = 180, n0 = -90, e0 = -180, area = 0, logW = -Infinity;
     for (const i of members) {
-      const c = cells[i];
-      if (c.fit.misfit < cells[best].fit.misfit) best = i;
+      const c = at(cells, i);
+      if (c.fit.misfit < at(cells, best).fit.misfit) best = i;
       s0 = Math.min(s0, c.lat - size / 2);
       n0 = Math.max(n0, c.lat + size / 2);
       w0 = Math.min(w0, c.lon - size / 2);
@@ -183,7 +184,7 @@ function groupRegions(cells: { lat: number; lon: number; fit: FullFit }[], size:
       const lw = c.fit.logL + Math.log(a);
       logW = logW === -Infinity ? lw : Math.max(logW, lw) + Math.log1p(Math.exp(-Math.abs(logW - lw)));
     }
-    const b = cells[best];
+    const b = at(cells, best);
     regions.push({
       id: 0,
       bestLat: b.lat,

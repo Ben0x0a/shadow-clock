@@ -1,0 +1,53 @@
+/*
+ * mode-tabs.css — the mode tabs (Find the time / Find the place).
+ * Used by: features/mode-tabs/mode-tabs.ts.
+ * Depends on: app.css tokens.
+ */
+
+.mode-tabs {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  max-width: 100%;
+}
+.mode-tab {
+  min-height: 36px;
+  padding: 7px 18px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.mode-tab:hover {
+  color: var(--text-primary);
+}
+.mode-tab[aria-selected="true"] {
+  background: var(--accent-fill);
+  color: var(--on-fill);
+}
+.mode-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+@media (forced-colors: active) {
+  .mode-tab[aria-selected="true"] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}
+@media (max-width: 640px), (pointer: coarse) {
+  .mode-tabs {
+    width: 100%;
+  }
+  .mode-tab {
+    flex: 1;
+    min-height: 44px;
+    padding: 7px 8px;
+  }
+}

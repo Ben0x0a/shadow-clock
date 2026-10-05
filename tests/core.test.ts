@@ -3,13 +3,14 @@
  * Depends on: src/core/measurement.ts, src/core/stats.ts, src/core/zone.ts,
  *             src/core/solveTime.ts, tests/helpers.ts.
  */
-import { describe, expect, it } from "vitest";
-import { buildObservation } from "../src/core/measurement";
-import type { ShadowInput } from "../src/core/models";
-import { solveTime } from "../src/core/solveTime";
-import { chi2Quantile } from "../src/core/stats";
-import { wallToUtc, zoneOffsetMin } from "../src/core/zone";
-import { ATM, constraintsFor, syntheticShot } from "./helpers";
+import { describe, it } from "node:test";
+import { expect } from "./expect.ts";
+import { buildObservation } from "../src/core/measurement.ts";
+import type { ShadowInput } from "../src/core/models.ts";
+import { solveTime } from "../src/core/solveTime.ts";
+import { chi2Quantile } from "../src/core/stats.ts";
+import { wallToUtc, zoneOffsetMin } from "../src/core/zone.ts";
+import { ATM, constraintsFor, syntheticShot } from "./helpers.ts";
 
 const base: ShadowInput = {
   elevation: { method: "lengths", height: { kind: "gauss", value: 1, sigma: 0.01 }, shadow: { kind: "gauss", value: 1, sigma: 0.01 } },
@@ -21,10 +22,10 @@ const base: ShadowInput = {
 describe("measurement", () => {
   it("45° with first-order propagation", () => {
     const r = buildObservation(base, false);
-    if (!r.ok) throw new Error(r.error);
+    if (!r.ok) throw new Error(JSON.stringify(r.error));
     expect(r.obs.elevation.centre).toBeCloseTo(45, 10);
     // σh = sqrt(L²σH² + H²σL²)/(H²+L²) = sqrt(2)·0.01/2 rad
-    const lengths = r.obs.elevationBudget.find((b) => b.label.startsWith("Height"))!;
+    const lengths = r.obs.elevationBudget.find((b) => b.label === "budget.lengths")!;
     expect(lengths.amount).toBeCloseTo(((Math.SQRT2 * 0.01) / 2) * (180 / Math.PI), 8);
   });
   it("tip edge shifts the centre by the semi-diameter", () => {
@@ -45,7 +46,7 @@ describe("measurement", () => {
   });
   it("magnetic declination and 180° flip", () => {
     const r = buildObservation({ ...base, azimuth: { shadow: { kind: "gauss", value: 350, sigma: 1 }, reference: "magnetic", declinationDeg: 15 } }, false);
-    if (!r.ok) throw new Error(r.error);
+    if (!r.ok) throw new Error(JSON.stringify(r.error));
     expect(r.obs.azimuth!.centre).toBeCloseTo(185, 10);
   });
 });
@@ -79,7 +80,7 @@ describe("multi-photo time mode", () => {
     const two = [...one, fix(syntheticShot(T + 3 * 3600e3, LAT, LON, 0.2, null, { id: "b", label: "Photo 2", offsetS: 3 * 3600, timeSigmaS: 2 }))];
     const run = (shots: typeof one) => {
       const r = solveTime({ shots, site: { lat: LAT, lon: LON, heightM: 0, radiusM: 0 }, atmosphere: ATM, constraints: constraintsFor(2025), deltaTOverride: null });
-      if (!r.ok) throw new Error(r.error);
+      if (!r.ok) throw new Error(JSON.stringify(r.error));
       return r.result;
     };
     const a = run(one);
@@ -87,7 +88,7 @@ describe("multi-photo time mode", () => {
     // One elevation-only shadow: morning and afternoon solutions over two seasons.
     expect(a.clusters.length).toBeGreaterThanOrEqual(2);
     // Two photos 3 h apart fix the side of noon; the twin date remains (declination recurs).
-    expect(b.clusters.every((c) => c.bestFit.shots[0].solarTimeH < 12)).toBe(true);
+    expect(b.clusters.every((c) => (c.bestFit.shots[0]?.solarTimeH ?? 99) < 12)).toBe(true);
     expect(b.clusters.some((c) => c.windows.some((w) => w.startMs <= T && T <= w.endMs))).toBe(true);
   });
 });

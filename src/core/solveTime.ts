@@ -2,7 +2,7 @@
  * solveTime.ts — time mode: known place + shadows → every compatible date/time.
  *
  * Defines: solveTime(), prepareShots() (shared with the other solvers).
- * Used by: worker.ts, tests/solveTime.test.ts.
+ * Used by: workers/solver.ts, tests/solveTime.test.ts.
  * Depends on: core/measurement.ts, core/score.ts, core/ephemeris.ts, core/spa.ts,
  *             core/zone.ts, core/config.ts, core/models.ts.
  *
@@ -39,9 +39,9 @@ import {
   MIN_YEAR,
   RATE_SAFETY_FACTOR,
   SUN_MAX_RATE_DEG_PER_MIN,
-} from "./config";
-import { Ephemeris } from "./ephemeris";
-import { buildObservation } from "./measurement";
+} from "./config.ts";
+import { Ephemeris } from "./ephemeris.ts";
+import { buildObservation } from "./measurement.ts";
 import type {
   Atmosphere,
   Cluster,
@@ -49,17 +49,19 @@ import type {
   DailyWindow,
   Heatmap,
   LevelSpan,
+  Message,
   Observation,
   Shot,
   TimeSolveRequest,
   TimeSolveResult,
-} from "./models";
-import { type FullFit, levelThreshold, type ScoredShot, Scorer } from "./score";
-import type { GeocentricSun } from "./spa";
-import { wallParts, wallToUtc } from "./zone";
+} from "./models.ts";
+import { type FullFit, levelThreshold, type ScoredShot, Scorer } from "./score.ts";
+import type { GeocentricSun } from "./spa.ts";
+import { at, last } from "./util.ts";
+import { wallParts, wallToUtc } from "./zone.ts";
 
-export type Progress = (fraction: number, phase: string) => void;
-export type SolveOutcome<T> = { ok: true; result: T } | { ok: false; error: string };
+export type Progress = (fraction: number, phase: Message) => void;
+export type SolveOutcome<T> = { ok: true; result: T } | { ok: false; error: Message };
 
 const RATE_DEG_PER_S = SUN_MAX_RATE_DEG_PER_MIN / 60;
 
@@ -67,12 +69,12 @@ const RATE_DEG_PER_S = SUN_MAX_RATE_DEG_PER_MIN / 60;
 export function prepareShots(
   shots: Shot[],
   atm: Atmosphere,
-): { ok: true; observations: Observation[] } | { ok: false; error: string } {
-  if (shots.length === 0) return { ok: false, error: "Add at least one shadow" };
+): { ok: true; observations: Observation[] } | { ok: false; error: Message } {
+  if (shots.length === 0) return { ok: false, error: { key: "core.err.noShadow" } };
   const observations: Observation[] = [];
   for (const s of shots) {
     const r = buildObservation(s.shadow, atm.refraction);
-    if (!r.ok) return { ok: false, error: `${s.label}: ${r.error}` };
+    if (!r.ok) return { ok: false, error: { ...r.error, shot: s.label } };
     observations.push(r.obs);
   }
   return { ok: true, observations };
@@ -94,7 +96,7 @@ class GeoAtOffsets {
   at(t: number): GeocentricSun[] {
     const g = this.distinct.map((o) => this.eph.at(t + o));
     this.evaluations += g.length;
-    return this.index.map((i) => g[i]);
+    return this.index.map((i) => at(g, i));
   }
 }
 
@@ -117,17 +119,17 @@ function makeAllowed(c: Constraints, lon: number) {
   };
 }
 
-function validate(req: TimeSolveRequest): string | null {
+function validate(req: TimeSolveRequest): Message | null {
   const { site, constraints: c } = req;
-  if (!(Math.abs(site.lat) <= 90) || !(Math.abs(site.lon) <= 180)) return "Location is invalid";
-  if (!(site.radiusM >= 0)) return "Location radius must be ≥ 0";
-  if (!Number.isInteger(c.yearFrom) || !Number.isInteger(c.yearTo)) return "Years must be integers";
-  if (c.yearFrom > c.yearTo) return "The first year is after the last year";
-  if (c.yearFrom < MIN_YEAR || c.yearTo > MAX_YEAR) return `Years must be within ${MIN_YEAR}–${MAX_YEAR}`;
-  if (c.yearTo - c.yearFrom + 1 > MAX_YEAR_SPAN) return `At most ${MAX_YEAR_SPAN} years per search`;
-  if (c.months.length !== 12 || !c.months.some(Boolean)) return "Select at least one month";
+  if (!(Math.abs(site.lat) <= 90) || !(Math.abs(site.lon) <= 180)) return { key: "core.err.location" };
+  if (!(site.radiusM >= 0)) return { key: "core.err.radius" };
+  if (!Number.isInteger(c.yearFrom) || !Number.isInteger(c.yearTo)) return { key: "core.err.yearsInteger" };
+  if (c.yearFrom > c.yearTo) return { key: "core.err.yearsOrder" };
+  if (c.yearFrom < MIN_YEAR || c.yearTo > MAX_YEAR) return { key: "core.err.yearsRange", vars: { min: MIN_YEAR, max: MAX_YEAR } };
+  if (c.yearTo - c.yearFrom + 1 > MAX_YEAR_SPAN) return { key: "core.err.yearsSpan", vars: { max: MAX_YEAR_SPAN } };
+  if (c.months.length !== 12 || !c.months.some(Boolean)) return { key: "core.err.months" };
   for (const s of req.shots) {
-    if (!(s.timeSigmaS >= 0) || !Number.isFinite(s.offsetS)) return `${s.label}: invalid time offset`;
+    if (!(s.timeSigmaS >= 0) || !Number.isFinite(s.offsetS)) return { key: "core.err.offset", shot: s.label };
   }
   return null;
 }
@@ -153,7 +155,7 @@ export function solveTime(req: TimeSolveRequest, progress?: Progress): SolveOutc
   // WHY: shot 1 defines the timeline, so its own offset/time uncertainty is zero by construction.
   const scored: ScoredShot[] = observations.map((obs, i) => ({
     obs,
-    timeSigmaS: i === 0 ? 0 : req.shots[i].timeSigmaS,
+    timeSigmaS: i === 0 ? 0 : at(req.shots, i).timeSigmaS,
   }));
   const scorer = new Scorer(scored, req.atmosphere, site.heightM);
   const offsets = req.shots.map((s, i) => (i === 0 ? 0 : s.offsetS * 1000));
@@ -190,7 +192,7 @@ export function solveTime(req: TimeSolveRequest, progress?: Progress): SolveOutc
       const g = geo.at(t);
       let pass = true;
       for (let i = 0; i < g.length && pass; i++) {
-        pass = scorer.coarseDistance(i, g[i], site.lat, site.lon) <= radii[i] + margin;
+        pass = scorer.coarseDistance(i, at(g, i), site.lat, site.lon) <= at(radii, i) + margin;
       }
       if (pass) {
         const a = Math.max(start, t - stepMs);
@@ -200,7 +202,7 @@ export function solveTime(req: TimeSolveRequest, progress?: Progress): SolveOutc
         else intervals.push([a, b]);
       }
       if (n % 5000 === 0) {
-        progress?.(((yi + (t - start) / (end - start + 1) * 0.6) / years.length) * (1 - heatShare), `Scanning ${year}`);
+        progress?.(((yi + (t - start) / (end - start + 1) * 0.6) / years.length) * (1 - heatShare), { key: "progress.scanning", vars: { year } });
       }
     }
 
@@ -216,7 +218,7 @@ export function solveTime(req: TimeSolveRequest, progress?: Progress): SolveOutc
         allWindows.push({ year, w }),
       );
       if (k % 20 === 0) {
-        progress?.(((yi + 0.6 + (0.4 * (k + 1)) / intervals.length) / years.length) * (1 - heatShare), `Refining ${year}`);
+        progress?.(((yi + 0.6 + (0.4 * (k + 1)) / intervals.length) / years.length) * (1 - heatShare), { key: "progress.refining", vars: { year } });
       }
     });
   });
@@ -226,7 +228,7 @@ export function solveTime(req: TimeSolveRequest, progress?: Progress): SolveOutc
 
   // 5. Heatmap of the first year.
   const heatmap = buildHeatmap(c.yearFrom, req, scorer, geo, allowed, (f) =>
-    progress?.(1 - heatShare + heatShare * f, "Drawing heatmap"),
+    progress?.(1 - heatShare + heatShare * f, { key: "progress.heatmap" }),
   );
 
   const warnings = collectWarnings(observations, clusters, req);
@@ -248,18 +250,18 @@ function extractWindows(samples: Sample[], atStart: boolean, atEnd: boolean, dof
   const dtS = FINE_STEP_S;
   let i = 0;
   while (i < samples.length) {
-    if (!samples[i].accepted) {
+    if (!at(samples, i).accepted) {
       i++;
       continue;
     }
     let j = i;
-    while (j + 1 < samples.length && samples[j + 1].accepted) j++;
+    while (j + 1 < samples.length && at(samples, j + 1).accepted) j++;
     const run = samples.slice(i, j + 1);
     const before = samples[i - 1];
     const after = samples[j + 1];
     const truncated =
       (before ? before.excluded : atStart) || (after ? after.excluded : atEnd);
-    let best = run[0];
+    let best = at(run, 0);
     let logW = -Infinity;
     for (const s of run) {
       const f = s.fit as FullFit;
@@ -272,14 +274,14 @@ function extractWindows(samples: Sample[], atStart: boolean, atEnd: boolean, dof
         const thr = levelThreshold(lv, dof);
         const inside = run.filter((s) => (s.fit as FullFit).chi2 <= thr);
         if (inside.length) {
-          levels.push({ level: lv, startMs: inside[0].t, endMs: inside[inside.length - 1].t });
+          levels.push({ level: lv, startMs: at(inside, 0).t, endMs: last(inside).t });
         }
       }
     }
     const bf = best.fit as FullFit;
     out.push({
-      startMs: run[0].t,
-      endMs: run[run.length - 1].t,
+      startMs: at(run, 0).t,
+      endMs: last(run).t,
       bestMs: best.t,
       bestFit: { chi2: bf.chi2, dof: bf.dof, rangeU: bf.rangeU, misfit: bf.misfit, shots: bf.shots },
       levels,
@@ -297,23 +299,31 @@ function todDiffMin(a: number, b: number): number {
 }
 
 function morning(w: DailyWindow): boolean {
-  return w.bestFit.shots[0].solarTimeH < 12;
+  return at(w.bestFit.shots, 0).solarTimeH < 12;
 }
 
 function buildClusters(items: { year: number; w: DailyWindow }[]): Cluster[] {
   items.sort((a, b) => a.w.bestMs - b.w.bestMs);
   const parent = items.map((_, i) => i);
-  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  const find = (i: number): number => {
+    const p = at(parent, i);
+    if (p === i) return i;
+    const root = find(p);
+    parent[i] = root;
+    return root;
+  };
   const maxGapMs = (CLUSTER_MAX_DAY_GAP + 0.5) * 86_400_000;
   for (let i = 0; i < items.length; i++) {
+    const a = at(items, i);
     for (let j = i - 1; j >= 0; j--) {
-      if (items[i].w.bestMs - items[j].w.bestMs > maxGapMs) break;
-      if (items[i].year !== items[j].year) continue;
+      const b = at(items, j);
+      if (a.w.bestMs - b.w.bestMs > maxGapMs) break;
+      if (a.year !== b.year) continue;
       // WHY: without azimuth the morning and afternoon solutions touch around the day the
       // Sun's maximum elevation equals the measured one; keeping them apart by the side of
       // solar noon reports them as the two distinct answers they are.
-      if (morning(items[i].w) !== morning(items[j].w)) continue;
-      if (todDiffMin(items[i].w.bestMs, items[j].w.bestMs) <= CLUSTER_MAX_TOD_GAP_MIN) {
+      if (morning(a.w) !== morning(b.w)) continue;
+      if (todDiffMin(a.w.bestMs, b.w.bestMs) <= CLUSTER_MAX_TOD_GAP_MIN) {
         parent[find(i)] = find(j);
       }
     }
@@ -330,7 +340,7 @@ function buildClusters(items: { year: number; w: DailyWindow }[]): Cluster[] {
   let id = 0;
   for (const g of groups.values()) {
     const windows = g.map((x) => x.w);
-    let best = windows[0];
+    let best = at(windows, 0);
     let logW = -Infinity;
     for (const w of windows) {
       if (w.bestFit.misfit < best.bestFit.misfit) best = w;
@@ -338,10 +348,10 @@ function buildClusters(items: { year: number; w: DailyWindow }[]): Cluster[] {
     }
     clusters.push({
       id: id++,
-      year: g[0].year,
+      year: at(g, 0).year,
       windows,
-      firstMs: windows[0].startMs,
-      lastMs: windows[windows.length - 1].endMs,
+      firstMs: at(windows, 0).startMs,
+      lastMs: last(windows).endMs,
       bestMs: best.bestMs,
       bestFit: best.bestFit,
       probability: logW, // normalised below
@@ -405,26 +415,26 @@ function nearSolstice(ms: number): boolean {
   return Math.abs(doy - 171.5) < 12 || Math.abs(doy - 354.5) < 12;
 }
 
-function collectWarnings(obs: Observation[], clusters: Cluster[], req: TimeSolveRequest): string[] {
-  const w = new Set<string>();
-  obs.forEach((o, i) => o.warnings.forEach((x) => w.add(`${req.shots[i].label}: ${x}`)));
-  w.add(
-    "The Sun's path repeats every year, so shadows alone cannot give the year: every year in the range is solved separately.",
-  );
+function collectWarnings(obs: Observation[], clusters: Cluster[], req: TimeSolveRequest): Message[] {
+  // De-duplicated by content: several shadows can raise the same warning.
+  const w = new Map<string, Message>();
+  const add = (m: Message) => w.set(JSON.stringify(m), m);
+  obs.forEach((o, i) => o.warnings.forEach((x) => add({ ...x, shot: at(req.shots, i).label })));
+  add({ key: "core.warn.noYear" });
   if (obs.every((o) => !o.azimuth)) {
-    w.add("No azimuth given: each day has a morning and an afternoon solution. Adding the shadow direction removes this ambiguity.");
+    add({ key: "core.warn.noAzimuth" });
   }
   if (clusters.length === 0) {
-    w.add("No time is compatible with the measurements and constraints. Check the inputs, the location or widen the uncertainties.");
+    add({ key: "core.warn.noTime" });
   }
   if (clusters.some((cl) => cl.truncated)) {
-    w.add("Some solutions are cut by a constraint or by the search range; they may extend beyond what is shown.");
+    add({ key: "core.warn.truncated" });
   }
   if (clusters.some((cl) => nearSolstice(cl.bestMs))) {
-    w.add("A solution lies near a solstice, where the Sun's declination changes slowly: the date is poorly constrained there and the two yearly solutions can merge.");
+    add({ key: "core.warn.solstice" });
   }
   if (clusters.some((cl) => cl.bestFit.dof > 0 && cl.bestFit.chi2 > levelThreshold(0.9545, cl.bestFit.dof))) {
-    w.add("Even the best-fitting time lies outside the 95 % region: the measurements may be inconsistent (wrong north reference, tilted object, sloped ground?).");
+    add({ key: "core.warn.inconsistent" });
   }
-  return [...w];
+  return [...w.values()];
 }

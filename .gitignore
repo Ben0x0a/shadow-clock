@@ -1,12 +1,11 @@
-# Dependencies and build output
+# Node tooling and intermediate compiler output (public/ is the published build: committed)
 node_modules/
+build/
 dist/
 *.tsbuildinfo
 
-# Tool caches
-.vite/
-.vitest/
-coverage/
+# Python bytecode (e2e/serve_public.py, platform tools)
+__pycache__/
 
 # Editors / OS
 .DS_Store
@@ -19,6 +18,14 @@ docs/internal/
 tasks/todo.md
 tasks/lessons.md
 
-# Case data and exported reports must never be committed
+# Case data, exported reports, source-page exports and downloaded copies must never be
+# committed (they may contain personal or case data)
 *.shadowclock.report.json
 cases/
+evidence/
+*.webarchive
+*.download.html
+
+# Playwright output
+test-results/
+playwright-report/

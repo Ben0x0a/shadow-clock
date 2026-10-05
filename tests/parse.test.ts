@@ -2,8 +2,9 @@
  * parse.test.ts — parsers for coordinates, map links, timestamps, offsets and durations.
  * Depends on: src/core/parse.ts.
  */
-import { describe, expect, it } from "vitest";
-import { parseDateTime, parseDuration, parseLocation, parseOffset } from "../src/core/parse";
+import { describe, it } from "node:test";
+import { expect } from "./expect.ts";
+import { parseDateTime, parseDuration, parseLocation, parseOffset } from "../src/core/parse.ts";
 
 const close = (r: { lat: number; lon: number } | null, lat: number, lon: number) => {
   expect(r).not.toBeNull();

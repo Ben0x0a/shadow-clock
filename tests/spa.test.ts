@@ -3,8 +3,9 @@
  * (Table A5.1: 17 Oct 2003 12:30:30 MST, Golden CO).
  * Depends on: src/core/spa.ts.
  */
-import { describe, expect, it } from "vitest";
-import { geocentricSun, julianDay, topocentricSun } from "../src/core/spa";
+import { describe, it } from "node:test";
+import { expect } from "./expect.ts";
+import { geocentricSun, julianDay, topocentricSun } from "../src/core/spa.ts";
 
 const MS = Date.UTC(2003, 9, 17, 19, 30, 30); // 12:30:30 at UTC−7
 const ATM = { pressureHpa: 820, temperatureC: 11, refraction: true };
@@ -27,9 +28,9 @@ describe("NREL SPA reference example", () => {
 
 describe("interpolated ephemeris", () => {
   it("matches exact SPA within 1e-5°", async () => {
-    const { Ephemeris } = await import("../src/core/ephemeris");
-    const { angleDiff } = await import("../src/core/spa");
-    const { deltaTSeconds, decimalYear } = await import("../src/core/deltaT");
+    const { Ephemeris } = await import("../src/core/ephemeris.ts");
+    const { angleDiff } = await import("../src/core/spa.ts");
+    const { deltaTSeconds, decimalYear } = await import("../src/core/deltaT.ts");
     const e = new Ephemeris(null);
     let worst = 0;
     for (let i = 0; i < 2000; i++) {

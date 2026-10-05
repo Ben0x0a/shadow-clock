@@ -2,7 +2,7 @@
  * parse.ts — lenient parsers for what analysts paste: coordinates, map links, EXIF/ISO
  * timestamps, UTC offsets and durations.
  *
- * Defines: parseLocation(), parseDateTime(), parseOffset(), parseDuration(), formatDuration().
+ * Defines: parseLocation(), parseDateTime(), parseOffset(), parseDuration().
  * Used by: ui/fields.ts, ui/shots.ts, ui/site.ts, ui/claim.ts, tests/parse.test.ts.
  * Depends on: nothing.
  *
@@ -69,9 +69,10 @@ export function parseLocation(input: string): LatLon | null {
   if (t.includes(";")) t = t.replace(/(\d),(\d)/g, "$1.$2");
 
   const letters = [...t.matchAll(/[NSEW]/gi)];
-  if (letters.length === 2) {
-    const i1 = letters[0].index as number;
-    const i2 = letters[1].index as number;
+  const [l1, l2] = letters;
+  if (letters.length === 2 && l1 && l2) {
+    const i1 = l1.index;
+    const i2 = l2.index;
     const suffix = /\d/.test(t.slice(0, i1));
     const a = suffix ? t.slice(0, i1 + 1) : t.slice(0, i2);
     const b = suffix ? t.slice(i1 + 1) : t.slice(i2);
@@ -85,9 +86,10 @@ export function parseLocation(input: string): LatLon | null {
   if (letters.length !== 0) return null;
 
   const halves = t.includes(",") || t.includes(";") ? t.split(/[,;]/) : null;
-  if (halves && halves.length === 2) {
-    const pa = part(halves[0]);
-    const pb = part(halves[1]);
+  const [h1, h2] = halves ?? [];
+  if (halves && halves.length === 2 && h1 !== undefined && h2 !== undefined) {
+    const pa = part(h1);
+    const pb = part(h2);
     return pa && pb ? valid(pa.value, pb.value) : null;
   }
   const nums = t.match(/-?\d+(?:\.\d+)?/g) ?? [];
@@ -168,28 +170,10 @@ export function parseDuration(input: string): number | null {
   let consumed = "";
   for (const x of body.matchAll(re)) {
     const v = Number(x[1]);
-    const u = x[2][0];
+    const u = (x[2] ?? "")[0];
     total += u === "d" ? v * 86400 : u === "h" ? v * 3600 : u === "m" ? v * 60 : v;
     consumed += x[0];
   }
   if (!consumed || body.replace(/\s+/g, "").length !== consumed.replace(/\s+/g, "").length) return null;
   return sign * total;
-}
-
-/** Formats seconds as "+1 h 23 min 4 s" (sign only when non-zero offsets matter). */
-export function formatDuration(sec: number, signed = false): string {
-  const sign = sec < 0 ? "−" : signed ? "+" : "";
-  let s = Math.round(Math.abs(sec));
-  const d = Math.floor(s / 86400);
-  s -= d * 86400;
-  const h = Math.floor(s / 3600);
-  s -= h * 3600;
-  const m = Math.floor(s / 60);
-  s -= m * 60;
-  const parts: string[] = [];
-  if (d) parts.push(`${d} d`);
-  if (h) parts.push(`${h} h`);
-  if (m) parts.push(`${m} min`);
-  if (s || parts.length === 0) parts.push(`${s} s`);
-  return sign + parts.join(" ");
 }

@@ -24,12 +24,12 @@
  * would make the reported windows falsely narrow — unacceptable for forensic use.
  */
 
-import { LOW_SUN_WARNING_DEG, REFRACTION_REL_SIGMA, SUN_SEMI_DIAMETER_DEG } from "./config";
-import type { BudgetItem, Component, ErrorKind, Observation, ShadowInput, Uncertain } from "./models";
+import { LOW_SUN_WARNING_DEG, REFRACTION_REL_SIGMA, SUN_SEMI_DIAMETER_DEG } from "./config.ts";
+import type { BudgetItem, Component, ErrorKind, Message, Observation, ShadowInput, Uncertain } from "./models.ts";
 
 const DEG = Math.PI / 180;
 
-export type ObservationResult = { ok: true; obs: Observation } | { ok: false; error: string };
+export type ObservationResult = { ok: true; obs: Observation } | { ok: false; error: Message };
 
 /** Bennett (1982) refraction for an apparent elevation, degrees (standard atmosphere). */
 export function refractionDeg(apparentDeg: number): number {
@@ -44,22 +44,26 @@ interface Partial {
   items: BudgetItem[];
 }
 
+/** Reason key ("core.err.*") when the quantity is unusable, else null. */
 function valid(u: Uncertain, positive: boolean): string | null {
   const nums = u.kind === "gauss" ? [u.value, u.sigma] : [u.min, u.max];
-  if (nums.some((n) => !Number.isFinite(n))) return "a value is missing";
-  if (u.kind === "gauss" && u.sigma < 0) return "the uncertainty must be ≥ 0";
-  if (u.kind === "range" && u.min > u.max) return "the minimum is larger than the maximum";
+  if (nums.some((n) => !Number.isFinite(n))) return "core.err.missing";
+  if (u.kind === "gauss" && u.sigma < 0) return "core.err.negativeSigma";
+  if (u.kind === "range" && u.min > u.max) return "core.err.minAboveMax";
   const lo = u.kind === "gauss" ? u.value : u.min;
-  if (positive && lo <= 0) return "values must be > 0";
+  if (positive && lo <= 0) return "core.err.notPositive";
   return null;
 }
 
-function elevationPart(s: ShadowInput): Partial | string {
+/** "<field>: <reason>" as a message. */
+const fieldError = (field: string, reason: string): Message => ({ key: "core.err.field", vars: { field: { key: field }, reason: { key: reason } } });
+
+function elevationPart(s: ShadowInput): Partial | Message {
   const e = s.elevation;
   if (e.method === "lengths") {
     const err = valid(e.height, true) ?? valid(e.shadow, true);
-    if (err) return `Height/shadow: ${err}`;
-    if (e.height.kind !== e.shadow.kind) return "Height and shadow must use the same error type";
+    if (err) return fieldError("core.field.heightShadow", err);
+    if (e.height.kind !== e.shadow.kind) return { key: "core.err.mixedKinds" };
     if (e.height.kind === "gauss" && e.shadow.kind === "gauss") {
       const H = e.height.value;
       const L = e.shadow.value;
@@ -69,7 +73,7 @@ function elevationPart(s: ShadowInput): Partial | string {
       return {
         kind: "gauss",
         centre: Math.atan2(H, L) / DEG,
-        items: [{ label: "Height & shadow length", amount: sig }],
+        items: [{ label: "budget.lengths", amount: sig }],
       };
     }
     if (e.height.kind === "range" && e.shadow.kind === "range") {
@@ -78,20 +82,20 @@ function elevationPart(s: ShadowInput): Partial | string {
       return {
         kind: "range",
         centre: (lo + hi) / 2,
-        items: [{ label: "Height & shadow length", amount: (hi - lo) / 2 }],
+        items: [{ label: "budget.lengths", amount: (hi - lo) / 2 }],
       };
     }
-    return "Height and shadow must use the same error type";
+    return { key: "core.err.mixedKinds" };
   }
   if (e.method === "ratio") {
     const err = valid(e.ratio, true);
-    if (err) return `Ratio: ${err}`;
+    if (err) return fieldError("core.field.ratio", err);
     if (e.ratio.kind === "gauss") {
       const r = e.ratio.value;
       return {
         kind: "gauss",
         centre: Math.atan(r) / DEG,
-        items: [{ label: "Height/shadow ratio", amount: e.ratio.sigma / (1 + r * r) / DEG }],
+        items: [{ label: "budget.ratio", amount: e.ratio.sigma / (1 + r * r) / DEG }],
       };
     }
     const lo = Math.atan(e.ratio.min) / DEG;
@@ -99,22 +103,22 @@ function elevationPart(s: ShadowInput): Partial | string {
     return {
       kind: "range",
       centre: (lo + hi) / 2,
-      items: [{ label: "Height/shadow ratio", amount: (hi - lo) / 2 }],
+      items: [{ label: "budget.ratio", amount: (hi - lo) / 2 }],
     };
   }
   const err = valid(e.angle, true);
-  if (err) return `Elevation: ${err}`;
+  if (err) return fieldError("core.field.elevation", err);
   if (e.angle.kind === "gauss") {
     return {
       kind: "gauss",
       centre: e.angle.value,
-      items: [{ label: "Elevation reading", amount: e.angle.sigma }],
+      items: [{ label: "budget.angle", amount: e.angle.sigma }],
     };
   }
   return {
     kind: "range",
     centre: (e.angle.min + e.angle.max) / 2,
-    items: [{ label: "Elevation reading", amount: (e.angle.max - e.angle.min) / 2 }],
+    items: [{ label: "budget.angle", amount: (e.angle.max - e.angle.min) / 2 }],
   };
 }
 
@@ -132,11 +136,11 @@ function combine(kind: ErrorKind, centre: number, items: BudgetItem[]): Componen
 }
 
 export function buildObservation(s: ShadowInput, refraction: boolean): ObservationResult {
-  const warnings: string[] = [];
+  const warnings: Message[] = [];
   const part = elevationPart(s);
-  if (typeof part === "string") return { ok: false, error: part };
+  if ("key" in part) return { ok: false, error: part };
   if (!(s.maxTiltDeg >= 0 && s.maxTiltDeg < 45)) {
-    return { ok: false, error: "Object tilt must be between 0° and 45°" };
+    return { ok: false, error: { key: "core.err.tilt" } };
   }
 
   const kind = part.kind;
@@ -147,26 +151,24 @@ export function buildObservation(s: ShadowInput, refraction: boolean): Observati
   const sd = SUN_SEMI_DIAMETER_DEG;
   if (s.tipEdge === "umbra") centre -= sd;
   else if (s.tipEdge === "outer") centre += sd;
-  else if (s.tipEdge === "unknown") items.push({ label: "Shadow tip edge (penumbra)", amount: uniform(kind, sd) });
-  else items.push({ label: "Shadow tip midpoint judgement", amount: uniform(kind, sd / 2) });
+  else if (s.tipEdge === "unknown") items.push({ label: "budget.tipEdge", amount: uniform(kind, sd) });
+  else items.push({ label: "budget.tipMidpoint", amount: uniform(kind, sd / 2) });
 
   // Tilt (step 3).
-  if (s.maxTiltDeg > 0) items.push({ label: "Object tilt", amount: uniform(kind, s.maxTiltDeg) });
+  if (s.maxTiltDeg > 0) items.push({ label: "budget.tilt", amount: uniform(kind, s.maxTiltDeg) });
 
   // Refraction model (step 4).
   if (refraction) {
     const r = refractionDeg(centre);
     const amt = kind === "gauss" ? REFRACTION_REL_SIGMA * r : 2 * REFRACTION_REL_SIGMA * r;
-    items.push({ label: "Refraction model", amount: amt });
+    items.push({ label: "budget.refraction", amount: amt });
   }
 
-  if (centre <= 0) return { ok: false, error: "The implied Sun elevation is not above the horizon" };
-  if (centre < LOW_SUN_WARNING_DEG) {
-    warnings.push("Low Sun (< 5°): refraction is large and variable; results are less reliable.");
-  }
+  if (centre <= 0) return { ok: false, error: { key: "core.err.belowHorizon" } };
+  if (centre < LOW_SUN_WARNING_DEG) warnings.push({ key: "core.warn.lowSun" });
   const elevation = combine(kind, centre, items);
   const elevSpread = elevation.kind === "gauss" ? elevation.sigma : elevation.half;
-  if (elevSpread > 5) warnings.push("Elevation uncertainty exceeds 5°: expect very wide windows.");
+  if (elevSpread > 5) warnings.push({ key: "core.warn.wideElevation" });
 
   // Azimuth (step 5).
   let azimuth: Component | null = null;
@@ -174,20 +176,20 @@ export function buildObservation(s: ShadowInput, refraction: boolean): Observati
   if (s.azimuth) {
     const a = s.azimuth;
     const err = valid(a.shadow, false);
-    if (err) return { ok: false, error: `Azimuth: ${err}` };
-    if (!Number.isFinite(a.declinationDeg)) return { ok: false, error: "Declination is missing" };
+    if (err) return { ok: false, error: fieldError("core.field.azimuth", err) };
+    if (!Number.isFinite(a.declinationDeg)) return { ok: false, error: { key: "core.err.declination" } };
     const decl = a.reference === "magnetic" ? a.declinationDeg : 0;
     const shadowAz = a.shadow.kind === "gauss" ? a.shadow.value : (a.shadow.min + a.shadow.max) / 2;
     const reading = a.shadow.kind === "gauss" ? a.shadow.sigma : (a.shadow.max - a.shadow.min) / 2;
-    azItems.push({ label: "Azimuth reading", amount: reading });
+    azItems.push({ label: "budget.azimuth", amount: reading });
     if (s.maxTiltDeg > 0) {
       const tiltAz = Math.atan(Math.sin(s.maxTiltDeg * DEG) * Math.tan(centre * DEG)) / DEG;
-      azItems.push({ label: "Object tilt", amount: uniform(a.shadow.kind, tiltAz) });
+      azItems.push({ label: "budget.tilt", amount: uniform(a.shadow.kind, tiltAz) });
     }
     const sunAz = (((shadowAz + decl + 180) % 360) + 360) % 360;
     azimuth = combine(a.shadow.kind, sunAz, azItems);
     if (centre > 80) {
-      warnings.push("Sun above 80°: the shadow is short, so its azimuth is poorly defined.");
+      warnings.push({ key: "core.warn.highSun" });
     }
   }
 

@@ -1,44 +1,43 @@
 /**
  * map.ts — Leaflet maps: the site picker (time mode) and the result map (place mode).
  *
- * Defines: tilesEnabled(), setTilesEnabled(), mountSiteMap(), mountResultMap().
- * Used by: ui/panels/site.ts, ui/results/place.ts.
- * Depends on: leaflet, core/models.ts, ui/dom.ts.
+ * Defines: tilesAllowed(), askForTiles(), onTilesChange(), mountSiteMap(), mountResultMap().
+ * Used by: features/inputs/panels/site.ts, features/results/place/view.ts.
+ * Depends on: Leaflet 1.9.4 (npm, pinned by the lockfile; ui/leaflet.css), the
+ *             platform's consent gate (ui/context.ts), core/models.ts, ui/dom.ts.
  *
- * WHY opt-in tiles: every tile request tells the tile server which area is being looked
- * at, which can disclose the subject of an investigation. Tiles therefore load only after
- * the user explicitly enables them (remembered per browser). Everything else works
- * without a map.
+ * WHY the consent gate: every tile request tells the tile server which area is being
+ * looked at, which can disclose the subject of an investigation. Leaflet loads its own
+ * images, so it cannot go through platform.net; tiles load only after
+ * platform.consent.request() allowed https://tile.openstreetmap.org (declared in
+ * src/site.json netOrigins, which also generates the CSP and states the referrer).
+ * Everything else works without a map.
  */
 
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-import type { GeoCell, GeoRegion } from "../core/models";
-import { h, icon, info } from "./dom";
+import * as L from "leaflet";
+import "./leaflet.css";
+import type { GeoCell, GeoRegion } from "../core/models.ts";
+import { platform, t } from "./context.ts";
+import { h, icon, info } from "./dom.ts";
 
-const TILES_KEY = "shadowclock.tiles";
+const TILE_ORIGIN = "https://tile.openstreetmap.org";
 const listeners = new Set<() => void>();
 
-export function tilesEnabled(): boolean {
-  try {
-    return localStorage.getItem(TILES_KEY) === "on";
-  } catch {
-    return false;
-  }
+/** True when the user already allowed the tile server (always, or for this session). */
+export function tilesAllowed(): boolean {
+  const state = platform().consent.state(TILE_ORIGIN);
+  return state === "always" || state === "session-allow";
 }
 
-export function setTilesEnabled(on: boolean): void {
-  try {
-    localStorage.setItem(TILES_KEY, on ? "on" : "off");
-  } catch {
-    /* storage unavailable (private mode): the choice lasts for this page only */
-  }
-  sessionOverride = on;
-  listeners.forEach((l) => l());
+/** Opens the consent dialog; when allowed, every map on the page loads its tiles. */
+export async function askForTiles(): Promise<void> {
+  // WHY: this runs only on an explicit click. An earlier "Deny" for this session would
+  // otherwise make the button silently do nothing; a deliberate click deserves the
+  // question again. ("Always allow" is never reached here: the map is already shown.)
+  const consent = platform().consent;
+  if (consent.state(TILE_ORIGIN) === "session-deny") consent.forget(TILE_ORIGIN);
+  if (await consent.request(TILE_ORIGIN)) listeners.forEach((l) => l());
 }
-
-let sessionOverride: boolean | null = null;
-const enabled = () => sessionOverride ?? tilesEnabled();
 
 export function onTilesChange(l: () => void): void {
   listeners.add(l);
@@ -46,20 +45,24 @@ export function onTilesChange(l: () => void): void {
 
 function baseMap(el: HTMLElement): L.Map {
   const map = L.map(el, { worldCopyJump: true, zoomControl: true, attributionControl: true }).setView([20, 0], 2);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  L.tileLayer(`${TILE_ORIGIN}/{z}/{x}/{y}.png`, {
     maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    attribution: t("map.attribution"),
+    // WHY: the page sends no Referer (platform default), but OpenStreetMap's tile usage
+    // policy asks for one. "strict-origin" sends only this site's origin, never the page
+    // URL; it is declared in site.json, so the consent dialog states it.
+    referrerPolicy: "strict-origin",
   }).addTo(map);
   return map;
 }
 
 /** Compact consent row: no tile is requested until the user asks for the map. */
-function consent(onEnable: () => void, what: string): HTMLElement {
+function consent(what: string): HTMLElement {
   return h(
     "div",
     { class: "map-consent" },
-    h("button", { type: "button", class: "btn", onclick: onEnable }, icon("pin", 16), what),
-    info("Map privacy", "Map tiles come from OpenStreetMap. Loading them tells the tile server which area you are looking at. Everything else stays in your browser."),
+    h("button", { type: "button", class: "btn", onclick: () => void askForTiles() }, icon("pin", 16), what),
+    info(t("map.privacyTitle"), t("map.privacyInfo")),
   );
 }
 
@@ -87,8 +90,8 @@ export function mountSiteMap(host: HTMLElement, onPick: (lat: number, lon: numbe
   };
 
   const init = () => {
-    if (map || !enabled()) {
-      if (!enabled()) host.replaceChildren(consent(() => setTilesEnabled(true), "Pick on a map"));
+    if (map || !tilesAllowed()) {
+      if (!tilesAllowed()) host.replaceChildren(consent(t("map.pick")));
       return;
     }
     const el = h("div", { class: "map" });
@@ -180,8 +183,8 @@ export function mountResultMap(host: HTMLElement, colour: (m: number) => string)
 
   const init = () => {
     if (map) return;
-    if (!enabled()) {
-      host.replaceChildren(consent(() => setTilesEnabled(true), "Show on a map"));
+    if (!tilesAllowed()) {
+      host.replaceChildren(consent(t("map.show")));
       return;
     }
     const el = h("div", { class: "map tall" });

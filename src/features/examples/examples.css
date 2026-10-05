@@ -1,0 +1,14 @@
+/*
+ * examples.css — example buttons (the menu uses the shared .menu styles).
+ * Used by: features/examples/examples.ts.
+ * Depends on: app.css tokens.
+ */
+
+.example-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.example-buttons .btn {
+  border-color: var(--border-strong);
+}

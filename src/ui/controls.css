@@ -1,0 +1,588 @@
+/*
+ * controls.css — shared controls: buttons, menus, segmented radios, panels, cards, fields, info buttons.
+ * Used by: ui/dom.ts (imported there), every feature.
+ * Depends on: app.css tokens (and the platform's base.css).
+ */
+
+/* ---- Buttons & menus ----------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--text-primary);
+  transition: background 0.12s, border-color 0.12s;
+}
+.btn:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn.ghost {
+  border-color: transparent;
+  background: transparent;
+}
+.btn.ghost:hover:not(:disabled) {
+  background: var(--accent-wash);
+}
+.btn.small {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 13px;
+}
+.btn.icon-only {
+  width: 38px;
+  padding: 0;
+}
+.btn.danger {
+  color: var(--bad);
+}
+input[type="time"]:focus,
+input[type="date"]:focus,
+input[type="time"]:focus-within,
+input[type="date"]:focus-within {
+  /* WHY :focus and :focus-within: Chrome focuses the inner sub-fields and the picker
+     button of date/time inputs, where :focus-visible on the input itself does not match. */
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  /* 24 px minimum target (WCAG 2.2 target-size) without looking like a button. */
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent-text);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-size: 13px;
+}
+.menu {
+  position: relative;
+}
+.menu > summary {
+  list-style: none;
+}
+.menu > summary::-webkit-details-marker {
+  display: none;
+}
+.menu-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  min-width: 260px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.16);
+  display: flex;
+  flex-direction: column;
+}
+.menu-list.right {
+  left: auto;
+  right: 0;
+}
+.menu-list button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.menu-list button:hover,
+.menu-list button:focus-visible {
+  background: var(--accent-wash);
+}
+.menu-list small {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.menu-list small.warn-text {
+  color: var(--warn);
+}
+.menu-list hr {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 4px 0;
+}
+#examples-list {
+  width: min(360px, calc(100vw - 32px));
+}
+.menu-list {
+  max-width: calc(100vw - 32px);
+}
+
+/* ---- Segmented control (native radios) ---------------------------------------------- */
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  width: fit-content;
+  max-width: 100%;
+}
+.seg-item {
+  position: relative;
+}
+.seg input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  /* Above its label: taps, focus and hit tests land on the real radio. */
+  z-index: 1;
+  cursor: pointer;
+}
+.seg label {
+  display: block;
+  padding: 5px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  user-select: none;
+}
+.seg input:checked + label {
+  background: var(--surface);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--border);
+}
+.seg input:focus-visible + label {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.seg.small label {
+  padding: 3px 10px;
+  font-size: 13px;
+}
+
+/* ---- Panels & cards ------------------------------------------------------------------ */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.panel > h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+}
+.panel.optional > h2::after {
+  content: "optional";
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 1px 8px;
+}
+.step {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent-wash);
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 700;
+}
+.panel.advanced {
+  gap: 0;
+}
+.panel.advanced > summary,
+details.card > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.panel.advanced > summary h2 {
+  font-size: 15px;
+  display: inline;
+  color: var(--text-secondary);
+}
+.panel.advanced[open] > summary {
+  margin-bottom: 12px;
+}
+.panel.advanced > summary::-webkit-details-marker,
+details.card > summary::-webkit-details-marker {
+  display: none;
+}
+.panel.advanced > summary::before,
+details.card > summary::before,
+details.cluster > summary::before,
+details.year > summary::before,
+details.notes > summary::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 10px;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+  vertical-align: 2px;
+  flex: none;
+}
+.panel.advanced[open] > summary::before,
+details.card[open] > summary::before,
+details.cluster[open] > summary::before,
+details.year[open] > summary::before,
+details.notes[open] > summary::before {
+  transform: rotate(45deg);
+}
+.section-intro {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.card.result {
+  padding: 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.card.result > summary {
+  display: flex;
+  align-items: center;
+}
+.card.result > summary h3 {
+  display: inline;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.card-head h3,
+.card.result h3 {
+  font-size: 15px;
+}
+.card-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ---- Fields -------------------------------------------------------------------------- */
+.row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.row > .field {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+.row > .field.wide {
+  flex: 3 1 220px;
+}
+.grow {
+  flex: 1 1 160px;
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.field label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.input-wrap {
+  position: relative;
+  display: flex;
+}
+.field input,
+.field select,
+.input-wrap input {
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--chart-surface);
+  font-variant-numeric: tabular-nums;
+}
+.field select {
+  padding-right: 28px;
+}
+.input-wrap .suffix {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 13px;
+  pointer-events: none;
+}
+.input-wrap:has(.suffix) input {
+  padding-right: 34px;
+}
+.input-wrap.joined input {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.input-wrap.joined select {
+  width: auto;
+  min-height: 38px;
+  border: 1px solid var(--border-strong);
+  border-left: 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--surface-2);
+  padding: 0 8px;
+}
+input[aria-invalid="true"] {
+  border-color: var(--bad) !important;
+  box-shadow: 0 0 0 3px var(--bad-wash);
+}
+input:focus,
+select:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+.hint {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  margin: 0;
+}
+.hint.ok {
+  color: var(--good);
+}
+.note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+fieldset.group {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 0;
+  padding: 12px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+fieldset.group legend {
+  font-weight: 600;
+  font-size: 14px;
+  padding: 0 8px 0 0;
+}
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 4px 6px 4px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  text-align: left;
+  white-space: normal;
+}
+.switch:hover {
+  background: none;
+}
+.switch-track {
+  width: 36px;
+  height: 20px;
+  border-radius: 99px;
+  background: var(--axis);
+  position: relative;
+  transition: background 0.15s;
+  flex: none;
+}
+.switch-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.switch[aria-checked="true"] .switch-track {
+  background: var(--accent);
+}
+.switch[aria-checked="true"] .switch-track::after {
+  transform: translateX(16px);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  position: relative;
+  display: inline-flex;
+}
+/* The real checkbox covers its visible chip, so taps, focus and hit tests land on it. */
+.chip input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  z-index: 1;
+  cursor: pointer;
+}
+.chip span {
+  display: inline-block;
+  min-width: 46px;
+  text-align: center;
+  padding: 4px 8px;
+  border-radius: 99px;
+  border: 1px solid var(--border-strong);
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-secondary);
+}
+.chip input:checked + span {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.chip input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.chip-actions {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* ---- Info buttons (native popover) ---------------------------------------------------- */
+.label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.label-row > label,
+.label-row > .field-label,
+.label-row > .section-intro {
+  margin: 0;
+}
+.info {
+  display: inline-flex;
+  flex: none;
+}
+.info-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-muted);
+  background: transparent;
+  color: var(--text-muted);
+  font: italic 700 13px/1 Georgia, "Times New Roman", serif;
+  cursor: pointer;
+  position: relative;
+}
+/* Invisible enlargement: a comfortable touch target without a bigger icon. */
+.info-btn::after {
+  content: "";
+  position: absolute;
+  inset: -11px;
+}
+.info-btn:hover,
+.info-btn:focus-visible {
+  border-color: var(--accent-text);
+  color: var(--accent-text);
+}
+.info-pop {
+  max-width: min(360px, calc(100vw - 32px));
+  margin: auto;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-primary);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.info-pop::backdrop {
+  background: rgba(0, 0, 0, 0.25);
+}
+.info-pop strong {
+  display: block;
+  margin-bottom: 6px;
+}
+.info-pop p {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+}
+.info-pop .btn {
+  margin-top: 4px;
+}
+legend .info {
+  vertical-align: -3px;
+}
+

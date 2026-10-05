@@ -1,15 +1,18 @@
 /**
  * dom.ts — minimal DOM construction helpers (no framework).
  *
- * Defines: h() element builder, segmented() radio group, field() labelled input, svg(),
- *          info() "i" button with a popover explanation.
- * Used by: every module under ui/.
+ * Defines: h() element builder, segmented() radio group, switchButton(), field() labelled
+ *          input, svg(), info() "i" button with a popover explanation, icon(), replace().
+ * Used by: every ui/ and features/ module.
  * Depends on: nothing.
  *
  * WHY: the page is small enough that a framework would add more weight than it saves;
  * these helpers keep markup readable while using native elements (radio groups, labels,
  * <details>, <dialog>) so keyboard and screen-reader behaviour come for free.
  */
+
+import { t } from "./context.ts";
+import "./controls.css";
 
 type Child = Node | string | number | null | undefined | false;
 type Props = Record<string, unknown>;
@@ -86,6 +89,31 @@ export function segmented<T extends string>(
   );
 }
 
+/**
+ * An on/off switch: a <button role="switch"> whose visible text is its name.
+ * WHY a button, not a styled checkbox: the whole control (track and text) is one target,
+ * so it reaches 44 px on phones with its visible box, and voice control can say its text.
+ */
+export function switchButton(
+  label: string,
+  checked: boolean,
+  onChange: (on: boolean) => void,
+  opts: { id?: string; title?: string; compact?: boolean } = {},
+): HTMLButtonElement {
+  const btn = h(
+    "button",
+    { type: "button", role: "switch", class: `switch${opts.compact ? " compact" : ""}`, id: opts.id, title: opts.title, "aria-checked": String(checked) },
+    h("span", { class: "switch-track", "aria-hidden": "true" }),
+    h("span", null, label),
+  );
+  btn.addEventListener("click", () => {
+    const on = btn.getAttribute("aria-checked") !== "true";
+    btn.setAttribute("aria-checked", String(on));
+    onChange(on);
+  });
+  return btn;
+}
+
 export interface FieldOpts {
   label: string;
   value: string;
@@ -138,18 +166,36 @@ export function field(o: FieldOpts): HTMLElement {
  */
 export function info(title: string, ...content: (string | Node)[]): HTMLElement {
   const id = nextId("pop");
-  return h(
+  const wrap = h(
     "span",
     { class: "info" },
-    h("button", { type: "button", class: "info-btn", popovertarget: id, "aria-label": `More about ${title}`, title: "More information" }, "i"),
+    h("button", { type: "button", class: "info-btn", popovertarget: id, "aria-label": t("info.more", { title }), title: t("info.title") }, "i"),
     h(
       "div",
       { id, popover: "auto", class: "info-pop", role: "note" },
       h("strong", null, title),
       ...content.map((c) => (typeof c === "string" ? h("p", null, c) : c)),
-      h("button", { type: "button", class: "btn small", popovertarget: id, popovertargetaction: "hide" }, "Got it"),
+      h("button", { type: "button", class: "btn small", popovertarget: id, popovertargetaction: "hide" }, t("info.ok")),
     ),
   );
+  closeInfoOnFocusAway();
+  return wrap;
+}
+
+let focusWatch = false;
+/**
+ * WHY: an open explanation must not cover where keyboard focus goes next; when focus
+ * moves outside an "i" button and its popover, the popover closes (Escape also works).
+ * One listener for the whole page (info() runs on every re-render).
+ */
+function closeInfoOnFocusAway(): void {
+  if (focusWatch) return;
+  focusWatch = true;
+  document.addEventListener("focusin", (e) => {
+    document.querySelectorAll<HTMLElement>(".info-pop:popover-open").forEach((pop) => {
+      if (!pop.parentElement?.contains(e.target as Node)) pop.hidePopover();
+    });
+  });
 }
 
 export function icon(name: keyof typeof ICONS, size = 18): SVGElement {
@@ -175,6 +221,7 @@ const ICONS = {
   check: '<path d="M20 6 9 17l-5-5"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
   locate: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
   book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5V21h16"/>',
 };
 

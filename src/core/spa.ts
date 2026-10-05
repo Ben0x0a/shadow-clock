@@ -16,8 +16,9 @@
  * nearby observer positions (location-uncertainty Jacobian) for the price of one ephemeris.
  */
 
-import { SUN_SEMI_DIAMETER_DEG } from "./config";
-import type { Atmosphere } from "./models";
+import { SUN_SEMI_DIAMETER_DEG } from "./config.ts";
+import type { Atmosphere } from "./models.ts";
+import { at } from "./util.ts";
 
 const DEG = Math.PI / 180;
 
@@ -231,8 +232,8 @@ export function geocentricSun(ms: number, deltaT: number): GeocentricSun {
   let dPsi = 0;
   let dEps = 0;
   for (let i = 0; i < NUT_Y.length; i++) {
-    const y = NUT_Y[i];
-    const pe = NUT_PE[i];
+    const y = at(NUT_Y, i);
+    const pe = at(NUT_PE, i);
     const arg = (x0 * y[0] + x1 * y[1] + x2 * y[2] + x3 * y[3] + x4 * y[4]) * DEG;
     dPsi += (pe[0] + pe[1] * jce) * Math.sin(arg);
     dEps += (pe[2] + pe[3] * jce) * Math.cos(arg);
