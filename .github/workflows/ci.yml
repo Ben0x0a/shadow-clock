@@ -10,12 +10,8 @@
 #           esbuild, Playwright), the `swp` command of static-web-platform,
 #           scenarios.json, e2e/.
 #
-# The platform is a PRIVATE Git submodule in platform/ (package.json:
-# "file:platform"). The app is checked out with the job's own token; the
-# submodule is then fetched with a read-only deploy key of the platform
-# repository, stored in this repository as the secret PLATFORM_DEPLOY_KEY.
-# (A deploy key opens only the platform, read-only, and does not expire.)
-# If the platform repository is public, drop that step and set submodules: true.
+# The platform is a public Git submodule in platform/ (package.json:
+# "file:platform"), fetched by the checkout step (submodules: true).
 #
 # WHY actions are pinned to commit SHAs (version in the comment): a tag can be
 # moved to other code; a SHA cannot. Dependabot proposes updates.
@@ -42,23 +38,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          submodules: false                 # private submodule: fetched in the next step
-
-      # HOW: GitHub's SSH host keys come from its API over HTTPS (TLS proves
-      # their origin, unlike ssh-keyscan). ShadowClock's .gitmodules already uses
-      # the SSH address; the insteadOf rewrite only matters for an HTTPS address.
-      - name: Fetch the private platform submodule (read-only deploy key)
-        env:
-          PLATFORM_DEPLOY_KEY: ${{ secrets.PLATFORM_DEPLOY_KEY }}
-        run: |
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$PLATFORM_DEPLOY_KEY" > ~/.ssh/platform
-          chmod 600 ~/.ssh/platform
-          curl -fsSL https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com " + .' > ~/.ssh/known_hosts
-          git -c url."git@github.com:".insteadOf="https://github.com/" \
-              -c core.sshCommand="ssh -i ~/.ssh/platform -o IdentitiesOnly=yes" \
-              submodule update --init --depth 1
-          rm -f ~/.ssh/platform
+          submodules: true
 
       # Installs the Node.js version pinned in mise.toml (same as on the developer machine).
       - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
