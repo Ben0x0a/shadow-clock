@@ -11,7 +11,7 @@
   available; the cache is only the fallback when it is not. Other origins are
   never touched or cached.
 */
-const CACHE_NAME = "shadowclock-1e45dce53ccc";
+const CACHE_NAME = "shadowclock-1e2bcc673e01";
 const PRECACHE = ["./", "config.js", "app.js", "base.css", "app.css", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "workers/solver.js"];
 
 self.addEventListener("install", event => {

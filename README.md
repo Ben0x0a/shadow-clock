@@ -119,7 +119,7 @@ of a US provider (`_headers` then translates into that server's configuration).
 | Library | Version | Source | Licence |
 |---|---|---|---|
 | Leaflet | 1.9.4 | npm, pinned by `package-lock.json`; script bundled into `app.js`, stylesheet into `app.css` (its images embedded) | BSD-2-Clause |
-| static-web-platform | 1.4.0 | `platform/` submodule (shared base: consent, storage, sharing, dialogs, build, gate) | see its repository |
+| static-web-platform | 1.5.1 | `platform/` submodule (shared base: consent, storage, sharing, dialogs, build, gate) | see its repository |
 
 Nothing else from `node_modules/` is shipped: TypeScript, esbuild and Playwright are build
 and test tools only, pinned by `package-lock.json`.
@@ -155,6 +155,14 @@ release.
 
 See [docs/README.md](docs/README.md): method and assumptions, how to read the results,
 workflows, the report format and the architecture.
+
+## Licence
+
+Copyright 2026 Ben0x0a. Licensed under the [Apache License, Version 2.0](LICENSE).
+
+Bundled third-party material keeps its own licence:
+- Leaflet: BSD-2-Clause.
+- static-web-platform: Apache-2.0 (its notice stays in `app.js` as a legal comment).
 
 ## Development & AI use
 

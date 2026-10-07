@@ -15,8 +15,8 @@ window.__SWP_SITE__ = {
   },
   "options": {},
   "mode": "site",
-  "version": "1e45dce53ccc",
-  "date": "2026-10-05",
+  "version": "1e2bcc673e01",
+  "date": "2026-10-07",
   "assets": [],
   "workers": [
     "solver"

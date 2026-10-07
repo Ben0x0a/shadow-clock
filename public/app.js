@@ -10465,6 +10465,9 @@
     };
   }
 
+  // node_modules/static-web-platform/src/index.ts
+  /*! static-web-platform | Copyright 2026 Ben0x0a | Apache-2.0 | https://github.com/Ben0x0a/static-web-platform */
+
   // src/core/form.ts
   var MAX_SHOTS = 4;
   var shotCounter = 0;

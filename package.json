@@ -2,7 +2,8 @@
   "name": "shadowclock",
   "version": "2.0.0",
   "private": true,
-  "description": "ShadowClock \u2014 time and place from shadows. Built on static-web-platform; public/ is what ships.",
+  "license": "Apache-2.0",
+  "description": "ShadowClock — time and place from shadows. Built on static-web-platform; public/ is what ships.",
   "type": "module",
   "engines": {
     "node": ">=24"
