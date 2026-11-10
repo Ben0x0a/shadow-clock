@@ -4,7 +4,8 @@
  *
  * Defines: buildTimeRequest(), buildPlaceRequest(), buildClaimRequest(), parseNumber(),
  *          FieldError.
- * Used by: state/solve.ts, features/inputs (inline validation), features/share-export.
+ * Used by: api/operations.ts (every operation validates and builds through it);
+ *          features/inputs (input aids: parseNumber, buildShadowOnly); tests.
  * Depends on: core/models.ts, core/parse.ts, core/zone.ts, core/form.ts.
  */
 

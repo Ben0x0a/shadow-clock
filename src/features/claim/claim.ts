@@ -5,7 +5,7 @@
  * Defines: mountClaim() → the collapsible card (placed under the time answer by main.ts).
  * Used by: main.ts.
  * Depends on: api/operations.ts (checkClaim, shared with the command line), core/zone.ts,
- *             core/request.ts, core/models.ts, state/case.ts, state/solve.ts, ui/dom.ts,
+ *             core/models.ts, state/case.ts, state/solve.ts, ui/dom.ts,
  *             ui/format.ts, ui/context.ts.
  */
 
@@ -14,7 +14,6 @@ import type { ClaimOffsetResult, TimeSolveResult, Zone } from "../../core/models
 import { formatOffset } from "../../core/zone.ts";
 import { field, h, icon, info } from "../../ui/dom.ts";
 import { fmtDateTime, fmtSpan } from "../../ui/format.ts";
-import { buildTimeRequest } from "../../core/request.ts";
 import { t, tm } from "../../ui/context.ts";
 import { at } from "../../core/util.ts";
 import type { CaseStore } from "../../state/case.ts";
@@ -201,10 +200,11 @@ export function mountClaim(cases: CaseStore, session: SolveSession): HTMLElement
     clearTimeout(timer);
     timer = window.setTimeout(() => {
       if (cases.state.mode !== "time") return;
-      const b = buildTimeRequest(cases.state);
-      const zone = b.ok ? b.req.constraints.zone : { kind: "utc" as const };
-      const lon = b.ok ? b.req.site.lon : 0;
-      updateClaim(cases, zone, lon, session.solved?.mode === "time" ? session.solved.res : null);
+      // The nearest solution is shown in the zone of the request it was solved from.
+      const solved = session.solved?.mode === "time" ? session.solved : null;
+      const zone = solved ? solved.req.constraints.zone : { kind: "utc" as const };
+      const lon = solved ? solved.req.site.lon : 0;
+      updateClaim(cases, zone, lon, solved ? solved.res : null);
     }, 250);
   };
   const render = (): void => {

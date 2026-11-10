@@ -2,7 +2,8 @@
  * solveTime.ts — time mode: known place + shadows → every compatible date/time.
  *
  * Defines: solveTime(), prepareShots() (shared with the other solvers).
- * Used by: workers/solver.ts, tests/solveTime.test.ts.
+ * Used by: api/operations.ts (findTime), core/claimCheck.ts and core/solveLocation.ts
+ *          (prepareShots), tests.
  * Depends on: core/measurement.ts, core/score.ts, core/ephemeris.ts, core/spa.ts,
  *             core/zone.ts, core/config.ts, core/models.ts.
  *

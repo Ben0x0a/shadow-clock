@@ -209,7 +209,7 @@ function denoIo() {
 function startCli(spec) {
   if (!import.meta.main) return;
   const io = denoIo();
-  runCli(spec, Deno.args, { version: "b41eea5a313b", date: "2026-11-10" }, io).then((code) => Deno.exit(code)).catch(async (err) => {
+  runCli(spec, Deno.args, { version: "923efecc21ca", date: "2026-11-10" }, io).then((code) => Deno.exit(code)).catch(async (err) => {
     await io.err(`${spec.name}: internal error: ${err instanceof Error ? err.stack ?? err.message : String(err)}
 `);
     Deno.exit(EXIT.internal);
@@ -2391,6 +2391,39 @@ function groupRegions(cells, size) {
   return regions.map(({ logW, ...r2 }, i) => ({ ...r2, id: i, probability: Math.exp(logW - m) / sum }));
 }
 
+// src/api/operations.ts
+function invalid(messages) {
+  return { ok: false, code: "invalid-case", message: messages.map(formatMessage).join("\n"), messages };
+}
+function built(b) {
+  return b.ok ? { ok: true, value: b.req } : { ...invalid(b.errors.map((e) => e.msg)), fields: b.errors };
+}
+function findTime(state, progress) {
+  const req = built(buildTimeRequest(state));
+  if (!req.ok) return req;
+  const r2 = solveTime(req.value, progress);
+  return r2.ok ? { ok: true, value: { request: req.value, result: r2.result } } : invalid([r2.error]);
+}
+function findPlace(state, progress) {
+  const req = built(buildPlaceRequest(state));
+  if (!req.ok) return req;
+  const r2 = solveLocation(req.value, progress);
+  return r2.ok ? { ok: true, value: { request: req.value, result: r2.result } } : invalid([r2.error]);
+}
+function checkClaim2(state) {
+  const req = built(buildClaimRequest(state));
+  if (!req.ok) return req;
+  const r2 = checkClaim(req.value);
+  return r2.ok ? { ok: true, value: { request: req.value, results: r2.result.results } } : invalid([r2.error]);
+}
+var EXAMPLE_NAMES = EXAMPLES.map((e) => e.label.replace(/^ex\./, ""));
+function example(name) {
+  const i = EXAMPLE_NAMES.indexOf(name);
+  const ex = EXAMPLES[i];
+  if (!ex) return { ok: false, code: "unknown-example", message: `Unknown example "${name}". Known: ${EXAMPLE_NAMES.join(", ")}.` };
+  return { ok: true, value: ex.build(translate) };
+}
+
 // src/api/results.ts
 function timeResults(res) {
   return {
@@ -2409,39 +2442,8 @@ function placeResults(res) {
     observations: res.observations
   };
 }
-
-// src/api/operations.ts
-function invalid(messages) {
-  return { ok: false, code: "invalid-case", message: messages.map(formatMessage).join("\n"), messages };
-}
-function built(b) {
-  return b.ok ? { ok: true, value: b.req } : invalid(b.errors.map((e) => e.msg));
-}
-function findTime(state) {
-  const req = built(buildTimeRequest(state));
-  if (!req.ok) return req;
-  const r2 = solveTime(req.value);
-  return r2.ok ? { ok: true, value: { request: req.value, results: timeResults(r2.result) } } : invalid([r2.error]);
-}
-function findPlace(state) {
-  const req = built(buildPlaceRequest(state));
-  if (!req.ok) return req;
-  const r2 = solveLocation(req.value);
-  return r2.ok ? { ok: true, value: { request: req.value, results: placeResults(r2.result) } } : invalid([r2.error]);
-}
-function checkClaim2(state) {
-  const req = built(buildClaimRequest(state));
-  if (!req.ok) return req;
-  const r2 = checkClaim(req.value);
-  return r2.ok ? { ok: true, value: { request: req.value, results: r2.result.results } } : invalid([r2.error]);
-}
-var EXAMPLE_NAMES = EXAMPLES.map((e) => e.label.replace(/^ex\./, ""));
-function example(name) {
-  const i = EXAMPLE_NAMES.indexOf(name);
-  const ex = EXAMPLES[i];
-  if (!ex) return { ok: false, code: "unknown-example", message: `Unknown example "${name}". Known: ${EXAMPLE_NAMES.join(", ")}.` };
-  return { ok: true, value: ex.build(translate) };
-}
+var exportTime = (s) => ({ request: s.request, results: timeResults(s.result) });
+var exportPlace = (s) => ({ request: s.request, results: placeResults(s.result) });
 
 // src/cli/text.ts
 var utc = (ms) => `${new Date(ms).toISOString().slice(0, 19).replace("T", " ")} UTC`;
@@ -2495,12 +2497,15 @@ function claimText(v) {
 }
 
 // src/cli/commands.ts
-function onCase(op) {
+function onCase(op, out) {
   return (bytes) => {
     const c = readCase(bytes ?? new Uint8Array());
-    return c.ok ? op(c.value) : c;
+    if (!c.ok) return c;
+    const r2 = op(c.value);
+    return r2.ok ? { ok: true, value: out(r2.value) } : r2;
   };
 }
+var same = (v) => v;
 var SPEC = {
   name: "shadowclock",
   summary: "Time and place from shadows (declared tolerances are hard bounds)",
@@ -2516,21 +2521,21 @@ var SPEC = {
       name: "find-time",
       summary: "Known place and shadows → the compatible dates and times",
       input: "file",
-      run: onCase(findTime),
+      run: onCase((s) => findTime(s), exportTime),
       text: (v) => timeText(v)
     },
     {
       name: "find-place",
       summary: "Shadows at known times → the compatible places",
       input: "file",
-      run: onCase(findPlace),
+      run: onCase((s) => findPlace(s), exportPlace),
       text: (v) => placeText(v)
     },
     {
       name: "check-claim",
       summary: "Is the case's claimed time (EXIF, witness) consistent with the shadows?",
       input: "file",
-      run: onCase(checkClaim2),
+      run: onCase(checkClaim2, same),
       text: (v) => claimText(v)
     }
   ]
@@ -2542,6 +2547,8 @@ export {
   EXAMPLE_NAMES,
   checkClaim2 as checkClaim,
   example,
+  exportPlace,
+  exportTime,
   findPlace,
   findTime,
   formatMessage,

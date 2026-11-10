@@ -2,7 +2,7 @@
  * claimCheck.ts — tests a claimed timestamp (e.g. EXIF DateTimeOriginal) against the shadows.
  *
  * Defines: checkClaim().
- * Used by: workers/solver.ts, tests/claimCheck.test.ts.
+ * Used by: api/operations.ts (checkClaim), tests.
  * Depends on: core/score.ts, core/solveTime.ts (prepareShots), core/ephemeris.ts,
  *             core/config.ts, core/models.ts.
  *

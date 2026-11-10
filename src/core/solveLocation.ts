@@ -2,7 +2,7 @@
  * solveLocation.ts — location mode: shadows with known UTC times → compatible places.
  *
  * Defines: solveLocation().
- * Used by: workers/solver.ts, tests/solveLocation.test.ts.
+ * Used by: api/operations.ts (findPlace), tests.
  * Depends on: core/score.ts, core/solveTime.ts (prepareShots), core/spa.ts, core/deltaT.ts,
  *             core/config.ts, core/models.ts.
  *

@@ -5,7 +5,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { describe, it } from "node:test";
 import { expect } from "./expect.ts";
-import { checkClaim, example, EXAMPLE_NAMES, findPlace, findTime, formatMessage, readCase } from "../src/api/index.ts";
+import { checkClaim, example, EXAMPLE_NAMES, exportTime, findPlace, findTime, formatMessage, readCase } from "../src/api/index.ts";
 import { MESSAGES } from "../src/api/messages.ts";
 
 const bytes = (x: unknown) => new TextEncoder().encode(typeof x === "string" ? x : JSON.stringify(x));
@@ -39,9 +39,9 @@ describe("operations recover each example's stated answer", () => {
   it("findTime: Paris, 15 Apr 2025 09:20 UTC", () => {
     const r = findTime(caseOf("paris"));
     if (!r.ok) throw new Error(r.message);
-    const best = r.value.results.clusters.map((c) => Math.abs(c.bestMs - Date.UTC(2025, 3, 15, 9, 20)));
+    const best = r.value.result.clusters.map((c) => Math.abs(c.bestMs - Date.UTC(2025, 3, 15, 9, 20)));
     expect(Math.min(...best)).toBeLessThan(5 * 60_000);
-    expect("probability" in (r.value.results.clusters[0] ?? {})).toBe(false);
+    expect("probability" in (exportTime(r.value).results.clusters[0] ?? {})).toBe(false);
   });
 
   it("checkClaim: Paris EXIF 11:20 fits at UTC+02:00", () => {
@@ -53,16 +53,23 @@ describe("operations recover each example's stated answer", () => {
   it("findPlace: Athens, 37.98 N 23.73 E inside the best region", () => {
     const r = findPlace(caseOf("athens"));
     if (!r.ok) throw new Error(r.message);
-    const [s, w, n, e] = r.value.results.regions[0]?.bounds ?? [0, 0, 0, 0];
+    const [s, w, n, e] = r.value.result.regions[0]?.bounds ?? [0, 0, 0, 0];
     expect(s <= 37.98 && 37.98 <= n && w <= 23.73 && 23.73 <= e).toBe(true);
   });
 
-  it("an invalid case lists every field error, worded", () => {
+  it("an invalid case lists every field error, worded, with the field it marks", () => {
     const s = caseOf("paris");
     s.site.loc = "nowhere";
     const r = findTime(s);
     expect(!r.ok && r.code).toBe("invalid-case");
     expect(!r.ok && r.message.length > 0 && !r.message.includes("val.")).toBe(true);
+    expect(!r.ok && (r.fields ?? []).length > 0).toBe(true);
+  });
+
+  it("reports progress while solving", () => {
+    let calls = 0;
+    findTime(caseOf("paris"), () => calls++);
+    expect(calls).toBeGreaterThanOrEqual(1);
   });
 
   it("an unknown example names the known ones", () => {

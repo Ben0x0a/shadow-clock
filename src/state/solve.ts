@@ -3,24 +3,28 @@
  *
  * Defines: JobRunner, SolveSession (live solving of the case), Solved, SolveStatus.
  * Used by: main.ts; features/results, features/claim, features/share-export.
- * Depends on: core/protocol.ts, core/request.ts, core/models.ts, state/case.ts.
+ * Depends on: core/protocol.ts, core/models.ts, core/request.ts (FieldError), state/case.ts.
  *
  * HOW: a new job terminates the running worker and starts a fresh one, so stale results
  * can never arrive after newer inputs. Message ids guard against late messages too.
+ * The worker validates and solves through the api/ operations (the command line's path),
+ * so this layer only sends the case and publishes what comes back.
  */
 
+import type { AppState } from "../core/form.ts";
 import type { LocationSolveRequest, LocationSolveResult, Message, TimeSolveRequest, TimeSolveResult } from "../core/models.ts";
 import type { WorkerMessage, WorkerRequest } from "../core/protocol.ts";
-import { buildPlaceRequest, buildTimeRequest, type FieldError } from "../core/request.ts";
+import type { FieldError } from "../core/request.ts";
 import type { CaseStore } from "./case.ts";
 
 type Handlers = {
   progress: (fraction: number, phase: Message) => void;
   done: (m: Extract<WorkerMessage, { type: "time" | "place" }>) => void;
+  invalid: (errors: FieldError[]) => void;
   error: (e: Message) => void;
 };
 
-type Job = { kind: "time"; req: Extract<WorkerRequest, { kind: "time" }>["req"] } | { kind: "place"; req: Extract<WorkerRequest, { kind: "place" }>["req"] };
+type Job = { kind: "time" | "place"; state: AppState };
 
 export class JobRunner {
   private readonly createWorker: () => Worker;
@@ -47,13 +51,14 @@ export class JobRunner {
       if (m.type === "progress") return handlers.progress(m.fraction, m.phase);
       this.busy = false;
       if (m.type === "error") handlers.error(m.error);
+      else if (m.type === "invalid") handlers.invalid(m.errors);
       else handlers.done(m);
     };
     this.worker.onerror = (e) => {
       this.busy = false;
       handlers.error({ key: "core.err.worker", vars: { detail: e.message } });
     };
-    this.worker.postMessage({ id, ...job } as WorkerRequest);
+    this.worker.postMessage({ id, ...job } satisfies WorkerRequest);
   }
 }
 
@@ -107,25 +112,23 @@ export class SolveSession {
   solve(): void {
     clearTimeout(this.timer);
     const s = this.cases.state;
-    const built = s.mode === "time" ? buildTimeRequest(s) : buildPlaceRequest(s);
-    this.invalid = new Set(built.ok ? [] : built.errors.map((e) => e.key));
-    if (!built.ok) {
-      this.solved = null;
-      this.publish({ kind: "invalid", errors: built.errors });
-      return;
-    }
-    this.publish({ kind: "running", fraction: 0, phase: null });
-    const req = built.req;
-    const job: Job = s.mode === "time" ? { kind: "time", req: req as TimeSolveRequest } : { kind: "place", req: req as LocationSolveRequest };
-    this.jobs.run(job, {
+    // WHY no "running" status here: validation now happens in the worker, and an invalid
+    // case answers within milliseconds; publishing "running" first would flash the stale
+    // look and "Computing…" on every keystroke. The first progress message shows it.
+    this.jobs.run({ kind: s.mode, state: s }, {
       progress: (fraction, phase) => this.publish({ kind: "running", fraction, phase }),
       done: (m) => {
-        this.solved = m.type === "time"
-          ? { mode: "time", req: req as TimeSolveRequest, res: m.result }
-          : { mode: "place", req: req as LocationSolveRequest, res: m.result };
+        this.invalid = new Set();
+        this.solved = m.type === "time" ? { mode: "time", req: m.req, res: m.result } : { mode: "place", req: m.req, res: m.result };
         this.publish({ kind: "done", solved: this.solved });
       },
+      invalid: (errors) => {
+        this.invalid = new Set(errors.map((e) => e.key));
+        this.solved = null;
+        this.publish({ kind: "invalid", errors });
+      },
       error: (error) => {
+        this.invalid = new Set();
         this.solved = null;
         this.publish({ kind: "error", error });
       },

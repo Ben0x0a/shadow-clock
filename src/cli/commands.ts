@@ -6,7 +6,7 @@
  * Depends on: static-web-platform/cli (CliSpec type), api/ (operations), cli/text.ts.
  *
  * HOW: each command is a thin adapter: read the case from the input file, call one api/
- * operation, return its result. Input is a case saved from the page or an exported
+ * operation, return its result in the exported form (api/results.ts, as the page's report). Input is a case saved from the page or an exported
  * `*.shadowclock.report.json` (its inputs are re-solved).
  * Not on the command line: the maps and charts (display only; the JSON carries their
  * data) and the guided steps (an input aid).
@@ -15,17 +15,24 @@
  */
 
 import type { CliSpec } from "static-web-platform/cli";
-import { type ApiResult, checkClaim, type ClaimValue, example, EXAMPLE_NAMES, findPlace, findTime, type PlaceValue, readCase, type TimeValue } from "../api/index.ts";
+import {
+  type ApiResult, checkClaim, type ClaimValue, example, EXAMPLE_NAMES, exportPlace, exportTime, findPlace, findTime, type PlaceValue,
+  readCase, type TimeValue,
+} from "../api/index.ts";
 import type { AppState } from "../core/form.ts";
 import { claimText, placeText, timeText } from "./text.ts";
 
-/** Reads the case, then runs the operation on it. */
-function onCase<T>(op: (s: AppState) => ApiResult<T>) {
-  return (bytes: Uint8Array | null) => {
+/** Reads the case, runs the operation on it, and converts the result to its exported form. */
+function onCase<T, U>(op: (s: AppState) => ApiResult<T>, out: (v: T) => U) {
+  return (bytes: Uint8Array | null): ApiResult<U> => {
     const c = readCase(bytes ?? new Uint8Array());
-    return c.ok ? op(c.value) : c;
+    if (!c.ok) return c;
+    const r = op(c.value);
+    return r.ok ? { ok: true, value: out(r.value) } : r;
   };
 }
+
+const same = <T>(v: T) => v;
 
 export const SPEC: CliSpec = {
   name: "shadowclock",
@@ -42,21 +49,21 @@ export const SPEC: CliSpec = {
       name: "find-time",
       summary: "Known place and shadows → the compatible dates and times",
       input: "file",
-      run: onCase(findTime),
+      run: onCase((s) => findTime(s), exportTime),
       text: (v) => timeText(v as TimeValue),
     },
     {
       name: "find-place",
       summary: "Shadows at known times → the compatible places",
       input: "file",
-      run: onCase(findPlace),
+      run: onCase((s) => findPlace(s), exportPlace),
       text: (v) => placeText(v as PlaceValue),
     },
     {
       name: "check-claim",
       summary: "Is the case's claimed time (EXIF, witness) consistent with the shadows?",
       input: "file",
-      run: onCase(checkClaim),
+      run: onCase(checkClaim, same),
       text: (v) => claimText(v as ClaimValue),
     },
   ],

@@ -8,6 +8,9 @@
  */
 
 export { type ApiResult, readCase } from "./case.ts";
-export { checkClaim, type ClaimValue, example, EXAMPLE_NAMES, findPlace, findTime, type PlaceValue, type TimeValue } from "./operations.ts";
-export { type PlaceResults, placeResults, type TimeResults, timeResults } from "./results.ts";
+export { checkClaim, type ClaimValue, example, EXAMPLE_NAMES, findPlace, findTime } from "./operations.ts";
+export {
+  exportPlace, exportTime, type PlaceResults, placeResults, type PlaceSolved, type PlaceValue, type TimeResults, timeResults,
+  type TimeSolved, type TimeValue,
+} from "./results.ts";
 export { formatMessage } from "./messages.ts";

@@ -191,10 +191,12 @@ and test tools only, pinned by `package-lock.json`.
    zip with a local server, for apps that fail from `file://`. ShadowClock does not: the
    solver worker starts from a `blob:` URL, and OpenStreetMap serves tiles to a page
    without a Referer (checked in Chrome on 2026-11-10). The single file needs no runtime.
-9. **The worker calls `core/` directly.** `state/` may not import `api/`, so the page
-   builds requests in `state/solve.ts` and the worker runs the core solvers; the
-   operations in `api/` call the same functions, and the page's report and claim check
-   use `api/`.
+9. **One path through `api/`.** The page and the command line call the same operations:
+   the page sends the case to the worker (`state/solve.ts` → `workers/solver.ts`), which
+   runs `findTime` / `findPlace`; the claim check calls `checkClaim`; the report and the
+   command line export results with the same functions. Form validation runs in the
+   worker too (errors come back with the field they mark), so the page shows *Computing…*
+   only once the worker reports progress, not on every keystroke.
 
 ## Not tested automatically
 

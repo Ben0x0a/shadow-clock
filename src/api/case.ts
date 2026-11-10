@@ -13,15 +13,17 @@
 
 import { type AppState, parseCase } from "../core/form.ts";
 import type { Message } from "../core/models.ts";
+import type { FieldError } from "../core/request.ts";
 import { translate } from "./messages.ts";
 
 /**
  * What every operation returns. The failure shape is the command line's (stable `code`,
- * readable `message`); `messages` keeps the individual messages for the page.
+ * readable `message`); `messages` keeps the individual messages for the page, and
+ * `fields` the form errors with the field each one marks (invalid case only).
  */
 export type ApiResult<T> =
   | { ok: true; value: T }
-  | { ok: false; code: string; message: string; messages?: Message[] };
+  | { ok: false; code: string; message: string; messages?: Message[]; fields?: FieldError[] };
 
 /** Default name of shadow n, as the page names it. */
 export const shotLabel = (n: number): string => translate("shot.default", { n });

@@ -2,7 +2,7 @@
  * examples.ts — built-in example cases for onboarding.
  *
  * Defines: EXAMPLES (label, description, build()).
- * Used by: features/examples (Examples menu), tests.
+ * Used by: features/examples (Examples menu), api/operations.ts (example), tests.
  * Depends on: core/spa.ts, core/deltaT.ts, core/form.ts.
  *
  * HOW: each example starts from a true place and time and generates the shadow

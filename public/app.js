@@ -10622,405 +10622,6 @@
     return !s.site.loc.trim() && s.shots.every((x) => !Object.values(x.f).some((v) => v.trim()) && !x.time.trim() && !x.az.trim());
   }
 
-  // src/core/parse.ts
-  var NUM = String.raw`-?\d+(?:\.\d+)?`;
-  function valid(lat, lon) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
-    return { lat, lon };
-  }
-  function fromUrl(t2) {
-    const pairs = [
-      new RegExp(String.raw`!3d(${NUM})!4d(${NUM})`),
-      // Google place pin
-      new RegExp(String.raw`[?&](?:q|query|ll|sll|daddr|center)=(${NUM})(?:,|%2C)\s*(${NUM})`),
-      new RegExp(String.raw`@(${NUM}),(${NUM})`)
-      // Google viewport
-    ];
-    for (const re of pairs) {
-      const m = t2.match(re);
-      if (m) return valid(Number(m[1]), Number(m[2]));
-    }
-    const osm = t2.match(new RegExp(String.raw`mlat=(${NUM}).*?mlon=(${NUM})`));
-    if (osm) return valid(Number(osm[1]), Number(osm[2]));
-    const map2 = t2.match(new RegExp(String.raw`#map=\d+(?:\.\d+)?/(${NUM})/(${NUM})`));
-    if (map2) return valid(Number(map2[1]), Number(map2[2]));
-    return null;
-  }
-  function part(s) {
-    const hemi = (s.match(/[NSEW]/i)?.[0] ?? null)?.toUpperCase() ?? null;
-    const nums = s.match(/-?\d+(?:\.\d+)?/g);
-    if (!nums || nums.length > 3) return null;
-    const [d, m = "0", sec = "0"] = nums;
-    const deg = Number(d);
-    if (Number(m) >= 60 || Number(sec) >= 60) return null;
-    let v = Math.abs(deg) + Number(m) / 60 + Number(sec) / 3600;
-    if (deg < 0 || d.startsWith("-") || hemi === "S" || hemi === "W") v = -v;
-    return { value: v, hemi };
-  }
-  function parseLocation(input) {
-    const raw = input.trim();
-    if (!raw) return null;
-    if (/https?:|www\.|maps|@|#map=|mlat=/i.test(raw)) {
-      const u = fromUrl(decodeURIComponent(raw));
-      if (u) return u;
-    }
-    let t2 = raw.replace(/[′’´`]/g, "'").replace(/[″”“]|''/g, '"').replace(/[º˚]/g, "°");
-    if (t2.includes(";")) t2 = t2.replace(/(\d),(\d)/g, "$1.$2");
-    const letters = [...t2.matchAll(/[NSEW]/gi)];
-    const [l1, l2] = letters;
-    if (letters.length === 2 && l1 && l2) {
-      const i1 = l1.index;
-      const i2 = l2.index;
-      const suffix = /\d/.test(t2.slice(0, i1));
-      const a = suffix ? t2.slice(0, i1 + 1) : t2.slice(0, i2);
-      const b = suffix ? t2.slice(i1 + 1) : t2.slice(i2);
-      const pa = part(a);
-      const pb = part(b.replace(/^[\s,;]+/, ""));
-      if (!pa || !pb) return null;
-      if (pa.hemi === "E" || pa.hemi === "W") return valid(pb.value, pa.value);
-      return valid(pa.value, pb.value);
-    }
-    if (letters.length !== 0) return null;
-    const halves = t2.includes(",") || t2.includes(";") ? t2.split(/[,;]/) : null;
-    const [h1, h2] = halves ?? [];
-    if (halves && halves.length === 2 && h1 !== void 0 && h2 !== void 0) {
-      const pa = part(h1);
-      const pb = part(h2);
-      return pa && pb ? valid(pa.value, pb.value) : null;
-    }
-    const nums = t2.match(/-?\d+(?:\.\d+)?/g) ?? [];
-    if (nums.length === 2 || nums.length === 4 || nums.length === 6) {
-      const h3 = nums.length / 2;
-      const pa = part(nums.slice(0, h3).join(" "));
-      const pb = part(nums.slice(h3).join(" "));
-      return pa && pb ? valid(pa.value, pb.value) : null;
-    }
-    return null;
-  }
-  function parseDateTime(input) {
-    const m = input.trim().match(
-      /^(\d{4})[-:/.](\d{1,2})[-:/.](\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?\s*(Z|UTC|GMT|[+-]\d{2}(?::?\d{2})?)?$/i
-    );
-    if (!m) return null;
-    const [, y, mo, d, h2 = "0", mi = "0", s = "0", frac = "", off] = m;
-    const month = Number(mo);
-    const day = Number(d);
-    if (month < 1 || month > 12 || day < 1 || day > 31 || Number(h2) > 23 || Number(mi) > 59 || Number(s) > 59) {
-      return null;
-    }
-    const ms = frac ? Math.round(Number(`0.${frac}`) * 1e3) : 0;
-    const wallMs = Date.UTC(Number(y), month - 1, day, Number(h2), Number(mi), Number(s), ms);
-    if (new Date(wallMs).getUTCDate() !== day) return null;
-    return { wallMs, offsetMin: off ? parseOffset(off) : null };
-  }
-  function parseOffset(input) {
-    const t2 = input.trim().toUpperCase().replace(/^(UTC|GMT)/, "").trim();
-    if (t2 === "" || t2 === "Z") return 0;
-    let m = t2.match(/^([+-−])(\d{1,2})(?::?(\d{2}))?$/);
-    if (m) {
-      const v = Number(m[2]) * 60 + Number(m[3] ?? 0);
-      return v > 14 * 60 ? null : m[1] === "+" ? v : -v;
-    }
-    m = t2.match(/^([+-−]?)(\d{1,2}(?:\.\d+)?)$/);
-    if (m) {
-      const v = Math.round(Number(m[2]) * 60);
-      return v > 14 * 60 ? null : m[1] === "-" || m[1] === "−" ? -v : v;
-    }
-    return null;
-  }
-  function parseDuration(input) {
-    const t2 = input.trim().toLowerCase().replace("−", "-");
-    if (!t2) return null;
-    let m = t2.match(/^([+-]?)(\d+):(\d{1,2})(?::(\d{1,2}(?:\.\d+)?))?$/);
-    if (m) {
-      const v = Number(m[2]) * 3600 + Number(m[3]) * 60 + Number(m[4] ?? 0);
-      return m[1] === "-" ? -v : v;
-    }
-    m = t2.match(/^[+-]?\d+(?:\.\d+)?$/);
-    if (m) return Number(t2);
-    const sign = t2.startsWith("-") ? -1 : 1;
-    const body = t2.replace(/^[+-]/, "");
-    const re = /(\d+(?:\.\d+)?)\s*(d|days?|h|hours?|hrs?|m|mins?|minutes?|s|secs?|seconds?)\b/g;
-    let total = 0;
-    let consumed = "";
-    for (const x of body.matchAll(re)) {
-      const v = Number(x[1]);
-      const u = (x[2] ?? "")[0];
-      total += u === "d" ? v * 86400 : u === "h" ? v * 3600 : u === "m" ? v * 60 : v;
-      consumed += x[0];
-    }
-    if (!consumed || body.replace(/\s+/g, "").length !== consumed.replace(/\s+/g, "").length) return null;
-    return sign * total;
-  }
-
-  // src/core/zone.ts
-  var formatters = /* @__PURE__ */ new Map();
-  var offsetCache = /* @__PURE__ */ new Map();
-  function ianaOffsetMin(name, ms) {
-    const hour = Math.floor(ms / 36e5);
-    const key = `${name}|${hour}`;
-    const hit = offsetCache.get(key);
-    if (hit !== void 0) return hit;
-    let f = formatters.get(name);
-    if (!f) {
-      f = new Intl.DateTimeFormat("en-GB", {
-        timeZone: name,
-        hourCycle: "h23",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit"
-      });
-      formatters.set(name, f);
-    }
-    const p = {};
-    for (const part2 of f.formatToParts(ms)) {
-      if (part2.type !== "literal") p[part2.type] = Number(part2.value);
-    }
-    const asUtc = Date.UTC(p.year ?? NaN, (p.month ?? NaN) - 1, p.day ?? NaN, p.hour ?? NaN, p.minute ?? NaN, p.second ?? NaN);
-    const off = Math.round((asUtc - Math.floor(ms / 1e3) * 1e3) / 6e4);
-    if (offsetCache.size > 4e5) offsetCache.clear();
-    offsetCache.set(key, off);
-    return off;
-  }
-  function isValidIana(name) {
-    try {
-      new Intl.DateTimeFormat("en-GB", { timeZone: name });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  function zoneOffsetMin(zone, ms, lon) {
-    switch (zone.kind) {
-      case "utc":
-        return 0;
-      case "offset":
-        return zone.minutes;
-      case "solar":
-        return lon * 4;
-      case "iana":
-        return ianaOffsetMin(zone.name, ms);
-    }
-  }
-  function wallToUtc(zone, wallMs, lon) {
-    let utc = wallMs - zoneOffsetMin(zone, wallMs, lon) * 6e4;
-    utc = wallMs - zoneOffsetMin(zone, utc, lon) * 6e4;
-    return utc;
-  }
-  function formatOffset(min) {
-    const sign = min < 0 ? "−" : "+";
-    const a = Math.abs(Math.round(min));
-    return `${sign}${String(Math.floor(a / 60)).padStart(2, "0")}:${String(a % 60).padStart(2, "0")}`;
-  }
-
-  // src/core/request.ts
-  function parseNumber(s) {
-    const t2 = s.trim().replace(",", ".").replace("−", "-");
-    return t2 === "" ? NaN : Number(t2);
-  }
-  var Collector = class {
-    errors = [];
-    /** `what` is the string-table key of the field's name. */
-    num(key, s, what, opts = {}) {
-      const v = s.trim() === "" && opts.empty !== void 0 ? opts.empty : parseNumber(s);
-      if (!Number.isFinite(v)) this.errors.push({ key, msg: { key: "val.number", vars: { what: { key: what } } } });
-      else if (opts.min !== void 0 && v < opts.min) this.errors.push({ key, msg: { key: "val.min", vars: { what: { key: what }, min: opts.min } } });
-      return v;
-    }
-    add(key, msgKey, vars) {
-      this.errors.push({ key, msg: { key: msgKey, vars } });
-    }
-  };
-  function tolerance(c, key, text, what) {
-    if (!text.trim()) {
-      c.add(key, "val.tolerance", { what: { key: what } });
-      return NaN;
-    }
-    return c.num(key, text, what, { min: 0 });
-  }
-  function bounded(c, sh, base, what, positive) {
-    const v = c.num(`${sh.id}.${base}`, sh.f[base] ?? "", what);
-    const t2 = tolerance(c, `${sh.id}.${base}t`, sh.f[`${base}t`] ?? "", what);
-    if (positive && Number.isFinite(v) && Number.isFinite(t2) && v - t2 <= 0) {
-      c.add(`${sh.id}.${base}t`, "val.toleranceTooBig", { what: { key: what } });
-    }
-    return { kind: "range", min: v - t2, max: v + t2 };
-  }
-  function buildShadow(c, sh) {
-    const elevation = sh.method === "lengths" ? { method: "lengths", height: bounded(c, sh, "h", "field.height", true), shadow: bounded(c, sh, "l", "field.shadow", true) } : sh.method === "ratio" ? { method: "ratio", ratio: bounded(c, sh, "r", "field.ratio", true) } : { method: "angle", angle: bounded(c, sh, "a", "field.elevation", true) };
-    let azimuth = null;
-    if (sh.azOn && sh.az.trim()) {
-      const v = c.num(`${sh.id}.az`, sh.az, "field.direction");
-      const t2 = tolerance(c, `${sh.id}.azt`, sh.azt, "field.direction");
-      azimuth = {
-        shadow: { kind: "range", min: v - t2, max: v + t2 },
-        reference: sh.azRef,
-        declinationDeg: sh.azRef === "magnetic" ? c.num(`${sh.id}.decl`, sh.decl, "field.declination", { empty: 0 }) : 0
-      };
-    }
-    return {
-      elevation,
-      tipEdge: sh.tip,
-      maxTiltDeg: c.num(`${sh.id}.tilt`, sh.tilt, "field.lean", { empty: 0, min: 0 }),
-      azimuth
-    };
-  }
-  function atmosphere(c, s) {
-    return {
-      pressureHpa: c.num("adv.pressure", s.adv.pressure, "field.pressure", { empty: 1010, min: 1 }),
-      temperatureC: c.num("adv.temp", s.adv.temp, "field.temperature", { empty: 10 }),
-      refraction: s.adv.refraction
-    };
-  }
-  function deltaT(c, s) {
-    return s.adv.deltaT.trim() === "" ? null : c.num("adv.deltaT", s.adv.deltaT, "field.deltaT");
-  }
-  function buildSite(c, s) {
-    const ll = parseLocation(s.site.loc);
-    if (!ll) c.add("site.loc", s.site.loc.trim() ? "val.locationBad" : "val.locationNeeded");
-    const r2 = c.num("site.radius", s.site.radius, "field.radius", { empty: 0, min: 0 });
-    return {
-      lat: ll?.lat ?? NaN,
-      lon: ll?.lon ?? NaN,
-      heightM: c.num("site.height", s.site.height, "field.siteHeight", { empty: 0 }),
-      radiusM: s.site.radiusUnit === "km" ? r2 * 1e3 : r2
-    };
-  }
-  function buildZone(c, s) {
-    const { zoneKind, zoneValue } = s.cons;
-    if (zoneKind === "offset") {
-      const m = parseOffset(zoneValue);
-      if (m === null) c.add("cons.zone", "val.offsetBad");
-      return { kind: "offset", minutes: m ?? 0 };
-    }
-    if (zoneKind === "iana") {
-      if (!isValidIana(zoneValue.trim())) c.add("cons.zone", "val.zoneBad");
-      return { kind: "iana", name: zoneValue.trim() || "UTC" };
-    }
-    return { kind: zoneKind };
-  }
-  function tod(c, key, s) {
-    if (!s.trim()) return null;
-    const m = s.trim().match(/^(\d{1,2}):(\d{2})$/);
-    if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) {
-      c.add(key, "val.hhmm");
-      return null;
-    }
-    return Number(m[1]) * 60 + Number(m[2]);
-  }
-  function bound(c, key, s, zone, lon) {
-    if (!s.trim()) return null;
-    const p = parseDateTime(s);
-    if (!p) {
-      c.add(key, "val.dateBad");
-      return null;
-    }
-    return p.offsetMin !== null ? p.wallMs - p.offsetMin * 6e4 : wallToUtc(zone, p.wallMs, Number.isFinite(lon) ? lon : 0);
-  }
-  function timeShots(c, s) {
-    return s.shots.map((sh, i) => {
-      const shadow = buildShadow(c, sh);
-      let offsetS = 0;
-      let sigma = 0;
-      if (i > 0 && sh.relation === "other") {
-        const o = parseDuration(sh.offset);
-        if (o === null) c.add(`${sh.id}.offset`, "val.gap");
-        offsetS = o ?? 0;
-        const sg = sh.offsetTol.trim() ? parseDuration(sh.offsetTol) : null;
-        if (sg === null || sg < 0) c.add(`${sh.id}.offsetTol`, "val.gapTolerance");
-        sigma = Math.abs(sg ?? 0);
-      }
-      return { id: sh.id, label: sh.label, shadow, offsetS, timeMs: NaN, timeSigmaS: sigma };
-    });
-  }
-  function buildTimeRequest(s) {
-    const c = new Collector();
-    const site = buildSite(c, s);
-    const zone = buildZone(c, s);
-    const constraints = {
-      yearFrom: c.num("cons.yearFrom", s.cons.yearFrom, "field.yearFrom"),
-      yearTo: c.num("cons.yearTo", s.cons.yearTo || s.cons.yearFrom, "field.yearTo"),
-      months: s.cons.months,
-      todFromMin: tod(c, "cons.todFrom", s.cons.todFrom),
-      todToMin: tod(c, "cons.todTo", s.cons.todTo),
-      notBeforeMs: bound(c, "cons.notBefore", s.cons.notBefore, zone, site.lon),
-      notAfterMs: bound(c, "cons.notAfter", s.cons.notAfter, zone, site.lon),
-      zone
-    };
-    if (constraints.todFromMin === null !== (constraints.todToMin === null)) {
-      c.add(constraints.todFromMin === null ? "cons.todFrom" : "cons.todTo", "val.todBoth");
-    }
-    const req = {
-      shots: timeShots(c, s),
-      site,
-      atmosphere: atmosphere(c, s),
-      constraints,
-      deltaTOverride: deltaT(c, s)
-    };
-    return c.errors.length ? { ok: false, errors: c.errors } : { ok: true, req };
-  }
-  function buildPlaceRequest(s) {
-    const c = new Collector();
-    const shots = s.shots.map((sh) => {
-      const shadow = buildShadow(c, sh);
-      const p = parseDateTime(sh.time);
-      let timeMs = NaN;
-      if (!p) c.add(`${sh.id}.time`, sh.time.trim() ? "val.dateTimeBad" : "val.whenTaken");
-      else {
-        const off = p.offsetMin ?? parseOffset(sh.timeOffset);
-        if (off === null) c.add(`${sh.id}.timeOffset`, "val.offsetBad");
-        timeMs = p.wallMs - (off ?? 0) * 6e4;
-      }
-      const sg = sh.timeTol.trim() ? parseDuration(sh.timeTol) : null;
-      if (sg === null || sg < 0) c.add(`${sh.id}.timeTol`, "val.timeTolerance");
-      return { id: sh.id, label: sh.label, shadow, offsetS: 0, timeMs, timeSigmaS: Math.abs(sg ?? 0) };
-    });
-    let bounds = null;
-    if (s.search.kind === "bbox") {
-      const [south = NaN, west = NaN, north = NaN, east = NaN, ...extra] = s.search.bbox.split(/[,;\s]+/).filter(Boolean).map(parseNumber);
-      if (extra.length || ![south, west, north, east].every(Number.isFinite) || south >= north || west >= east) {
-        c.add("search.bbox", "val.bbox");
-      } else bounds = [south, west, north, east];
-    }
-    const req = {
-      shots,
-      atmosphere: atmosphere(c, s),
-      bounds,
-      heightM: 0,
-      deltaTOverride: deltaT(c, s)
-    };
-    return c.errors.length ? { ok: false, errors: c.errors } : { ok: true, req };
-  }
-  function buildClaimRequest(s) {
-    const c = new Collector();
-    const site = buildSite(c, s);
-    const p = parseDateTime(s.claim.time);
-    if (!p) c.add("claim.time", s.claim.time.trim() ? "val.dateTimeBad" : "val.claimNeeded");
-    let offsetMin = p?.offsetMin ?? null;
-    if (offsetMin === null && s.claim.offset.trim()) {
-      offsetMin = parseOffset(s.claim.offset);
-      if (offsetMin === null) c.add("claim.offset", "val.offsetBad");
-    }
-    const req = {
-      shots: timeShots(c, s),
-      site,
-      atmosphere: atmosphere(c, s),
-      deltaTOverride: deltaT(c, s),
-      wallClockMs: p?.wallMs ?? NaN,
-      offsetMin
-    };
-    return c.errors.length ? { ok: false, errors: c.errors } : { ok: true, req };
-  }
-  function buildShadowOnly(sh) {
-    const c = new Collector();
-    const shadow = buildShadow(c, sh);
-    return c.errors.length ? null : shadow;
-  }
-
   // src/state/solve.ts
   var JobRunner = class {
     createWorker;
@@ -11045,6 +10646,7 @@
         if (m.type === "progress") return handlers.progress(m.fraction, m.phase);
         this.busy = false;
         if (m.type === "error") handlers.error(m.error);
+        else if (m.type === "invalid") handlers.invalid(m.errors);
         else handlers.done(m);
       };
       this.worker.onerror = (e) => {
@@ -11082,23 +10684,20 @@
     solve() {
       clearTimeout(this.timer);
       const s = this.cases.state;
-      const built2 = s.mode === "time" ? buildTimeRequest(s) : buildPlaceRequest(s);
-      this.invalid = new Set(built2.ok ? [] : built2.errors.map((e) => e.key));
-      if (!built2.ok) {
-        this.solved = null;
-        this.publish({ kind: "invalid", errors: built2.errors });
-        return;
-      }
-      this.publish({ kind: "running", fraction: 0, phase: null });
-      const req = built2.req;
-      const job = s.mode === "time" ? { kind: "time", req } : { kind: "place", req };
-      this.jobs.run(job, {
+      this.jobs.run({ kind: s.mode, state: s }, {
         progress: (fraction, phase) => this.publish({ kind: "running", fraction, phase }),
         done: (m) => {
-          this.solved = m.type === "time" ? { mode: "time", req, res: m.result } : { mode: "place", req, res: m.result };
+          this.invalid = /* @__PURE__ */ new Set();
+          this.solved = m.type === "time" ? { mode: "time", req: m.req, res: m.result } : { mode: "place", req: m.req, res: m.result };
           this.publish({ kind: "done", solved: this.solved });
         },
+        invalid: (errors) => {
+          this.invalid = new Set(errors.map((e) => e.key));
+          this.solved = null;
+          this.publish({ kind: "invalid", errors });
+        },
         error: (error) => {
+          this.invalid = /* @__PURE__ */ new Set();
           this.solved = null;
           this.publish({ kind: "error", error });
         }
@@ -12611,7 +12210,7 @@
     const arcmin = 1 / Math.tan((apparentDeg + 7.31 / (apparentDeg + 4.4)) * DEG2);
     return arcmin / 60;
   }
-  function valid2(u, positive) {
+  function valid(u, positive) {
     const nums = u.kind === "gauss" ? [u.value, u.sigma] : [u.min, u.max];
     if (nums.some((n) => !Number.isFinite(n))) return "core.err.missing";
     if (u.kind === "gauss" && u.sigma < 0) return "core.err.negativeSigma";
@@ -12624,7 +12223,7 @@
   function elevationPart(s) {
     const e = s.elevation;
     if (e.method === "lengths") {
-      const err2 = valid2(e.height, true) ?? valid2(e.shadow, true);
+      const err2 = valid(e.height, true) ?? valid(e.shadow, true);
       if (err2) return fieldError("core.field.heightShadow", err2);
       if (e.height.kind !== e.shadow.kind) return { key: "core.err.mixedKinds" };
       if (e.height.kind === "gauss" && e.shadow.kind === "gauss") {
@@ -12650,7 +12249,7 @@
       return { key: "core.err.mixedKinds" };
     }
     if (e.method === "ratio") {
-      const err2 = valid2(e.ratio, true);
+      const err2 = valid(e.ratio, true);
       if (err2) return fieldError("core.field.ratio", err2);
       if (e.ratio.kind === "gauss") {
         const r2 = e.ratio.value;
@@ -12668,7 +12267,7 @@
         items: [{ label: "budget.ratio", amount: (hi - lo) / 2 }]
       };
     }
-    const err = valid2(e.angle, true);
+    const err = valid(e.angle, true);
     if (err) return fieldError("core.field.elevation", err);
     if (e.angle.kind === "gauss") {
       return {
@@ -12723,7 +12322,7 @@
     const azItems = [];
     if (s.azimuth) {
       const a = s.azimuth;
-      const err = valid2(a.shadow, false);
+      const err = valid(a.shadow, false);
       if (err) return { ok: false, error: fieldError("core.field.azimuth", err) };
       if (!Number.isFinite(a.declinationDeg)) return { ok: false, error: { key: "core.err.declination" } };
       const decl = a.reference === "magnetic" ? a.declinationDeg : 0;
@@ -12744,6 +12343,61 @@
       ok: true,
       obs: { elevation, azimuth, elevationBudget: items, azimuthBudget: azItems, warnings }
     };
+  }
+
+  // src/core/zone.ts
+  var formatters = /* @__PURE__ */ new Map();
+  var offsetCache = /* @__PURE__ */ new Map();
+  function ianaOffsetMin(name, ms) {
+    const hour = Math.floor(ms / 36e5);
+    const key = `${name}|${hour}`;
+    const hit = offsetCache.get(key);
+    if (hit !== void 0) return hit;
+    let f = formatters.get(name);
+    if (!f) {
+      f = new Intl.DateTimeFormat("en-GB", {
+        timeZone: name,
+        hourCycle: "h23",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+      formatters.set(name, f);
+    }
+    const p = {};
+    for (const part2 of f.formatToParts(ms)) {
+      if (part2.type !== "literal") p[part2.type] = Number(part2.value);
+    }
+    const asUtc = Date.UTC(p.year ?? NaN, (p.month ?? NaN) - 1, p.day ?? NaN, p.hour ?? NaN, p.minute ?? NaN, p.second ?? NaN);
+    const off = Math.round((asUtc - Math.floor(ms / 1e3) * 1e3) / 6e4);
+    if (offsetCache.size > 4e5) offsetCache.clear();
+    offsetCache.set(key, off);
+    return off;
+  }
+  function zoneOffsetMin(zone, ms, lon) {
+    switch (zone.kind) {
+      case "utc":
+        return 0;
+      case "offset":
+        return zone.minutes;
+      case "solar":
+        return lon * 4;
+      case "iana":
+        return ianaOffsetMin(zone.name, ms);
+    }
+  }
+  function wallToUtc(zone, wallMs, lon) {
+    let utc = wallMs - zoneOffsetMin(zone, wallMs, lon) * 6e4;
+    utc = wallMs - zoneOffsetMin(zone, utc, lon) * 6e4;
+    return utc;
+  }
+  function formatOffset(min) {
+    const sign = min < 0 ? "−" : "+";
+    const a = Math.abs(Math.round(min));
+    return `${sign}${String(Math.floor(a / 60)).padStart(2, "0")}:${String(a % 60).padStart(2, "0")}`;
   }
 
   // src/core/solveTime.ts
@@ -12893,34 +12547,262 @@
     }
   ];
 
+  // src/core/parse.ts
+  var NUM = String.raw`-?\d+(?:\.\d+)?`;
+  function valid2(lat, lon) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+    return { lat, lon };
+  }
+  function fromUrl(t2) {
+    const pairs = [
+      new RegExp(String.raw`!3d(${NUM})!4d(${NUM})`),
+      // Google place pin
+      new RegExp(String.raw`[?&](?:q|query|ll|sll|daddr|center)=(${NUM})(?:,|%2C)\s*(${NUM})`),
+      new RegExp(String.raw`@(${NUM}),(${NUM})`)
+      // Google viewport
+    ];
+    for (const re of pairs) {
+      const m = t2.match(re);
+      if (m) return valid2(Number(m[1]), Number(m[2]));
+    }
+    const osm = t2.match(new RegExp(String.raw`mlat=(${NUM}).*?mlon=(${NUM})`));
+    if (osm) return valid2(Number(osm[1]), Number(osm[2]));
+    const map2 = t2.match(new RegExp(String.raw`#map=\d+(?:\.\d+)?/(${NUM})/(${NUM})`));
+    if (map2) return valid2(Number(map2[1]), Number(map2[2]));
+    return null;
+  }
+  function part(s) {
+    const hemi = (s.match(/[NSEW]/i)?.[0] ?? null)?.toUpperCase() ?? null;
+    const nums = s.match(/-?\d+(?:\.\d+)?/g);
+    if (!nums || nums.length > 3) return null;
+    const [d, m = "0", sec = "0"] = nums;
+    const deg = Number(d);
+    if (Number(m) >= 60 || Number(sec) >= 60) return null;
+    let v = Math.abs(deg) + Number(m) / 60 + Number(sec) / 3600;
+    if (deg < 0 || d.startsWith("-") || hemi === "S" || hemi === "W") v = -v;
+    return { value: v, hemi };
+  }
+  function parseLocation(input) {
+    const raw = input.trim();
+    if (!raw) return null;
+    if (/https?:|www\.|maps|@|#map=|mlat=/i.test(raw)) {
+      const u = fromUrl(decodeURIComponent(raw));
+      if (u) return u;
+    }
+    let t2 = raw.replace(/[′’´`]/g, "'").replace(/[″”“]|''/g, '"').replace(/[º˚]/g, "°");
+    if (t2.includes(";")) t2 = t2.replace(/(\d),(\d)/g, "$1.$2");
+    const letters = [...t2.matchAll(/[NSEW]/gi)];
+    const [l1, l2] = letters;
+    if (letters.length === 2 && l1 && l2) {
+      const i1 = l1.index;
+      const i2 = l2.index;
+      const suffix = /\d/.test(t2.slice(0, i1));
+      const a = suffix ? t2.slice(0, i1 + 1) : t2.slice(0, i2);
+      const b = suffix ? t2.slice(i1 + 1) : t2.slice(i2);
+      const pa = part(a);
+      const pb = part(b.replace(/^[\s,;]+/, ""));
+      if (!pa || !pb) return null;
+      if (pa.hemi === "E" || pa.hemi === "W") return valid2(pb.value, pa.value);
+      return valid2(pa.value, pb.value);
+    }
+    if (letters.length !== 0) return null;
+    const halves = t2.includes(",") || t2.includes(";") ? t2.split(/[,;]/) : null;
+    const [h1, h2] = halves ?? [];
+    if (halves && halves.length === 2 && h1 !== void 0 && h2 !== void 0) {
+      const pa = part(h1);
+      const pb = part(h2);
+      return pa && pb ? valid2(pa.value, pb.value) : null;
+    }
+    const nums = t2.match(/-?\d+(?:\.\d+)?/g) ?? [];
+    if (nums.length === 2 || nums.length === 4 || nums.length === 6) {
+      const h3 = nums.length / 2;
+      const pa = part(nums.slice(0, h3).join(" "));
+      const pb = part(nums.slice(h3).join(" "));
+      return pa && pb ? valid2(pa.value, pb.value) : null;
+    }
+    return null;
+  }
+  function parseDateTime(input) {
+    const m = input.trim().match(
+      /^(\d{4})[-:/.](\d{1,2})[-:/.](\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?\s*(Z|UTC|GMT|[+-]\d{2}(?::?\d{2})?)?$/i
+    );
+    if (!m) return null;
+    const [, y, mo, d, h2 = "0", mi = "0", s = "0", frac = "", off] = m;
+    const month = Number(mo);
+    const day = Number(d);
+    if (month < 1 || month > 12 || day < 1 || day > 31 || Number(h2) > 23 || Number(mi) > 59 || Number(s) > 59) {
+      return null;
+    }
+    const ms = frac ? Math.round(Number(`0.${frac}`) * 1e3) : 0;
+    const wallMs = Date.UTC(Number(y), month - 1, day, Number(h2), Number(mi), Number(s), ms);
+    if (new Date(wallMs).getUTCDate() !== day) return null;
+    return { wallMs, offsetMin: off ? parseOffset(off) : null };
+  }
+  function parseOffset(input) {
+    const t2 = input.trim().toUpperCase().replace(/^(UTC|GMT)/, "").trim();
+    if (t2 === "" || t2 === "Z") return 0;
+    let m = t2.match(/^([+-−])(\d{1,2})(?::?(\d{2}))?$/);
+    if (m) {
+      const v = Number(m[2]) * 60 + Number(m[3] ?? 0);
+      return v > 14 * 60 ? null : m[1] === "+" ? v : -v;
+    }
+    m = t2.match(/^([+-−]?)(\d{1,2}(?:\.\d+)?)$/);
+    if (m) {
+      const v = Math.round(Number(m[2]) * 60);
+      return v > 14 * 60 ? null : m[1] === "-" || m[1] === "−" ? -v : v;
+    }
+    return null;
+  }
+  function parseDuration(input) {
+    const t2 = input.trim().toLowerCase().replace("−", "-");
+    if (!t2) return null;
+    let m = t2.match(/^([+-]?)(\d+):(\d{1,2})(?::(\d{1,2}(?:\.\d+)?))?$/);
+    if (m) {
+      const v = Number(m[2]) * 3600 + Number(m[3]) * 60 + Number(m[4] ?? 0);
+      return m[1] === "-" ? -v : v;
+    }
+    m = t2.match(/^[+-]?\d+(?:\.\d+)?$/);
+    if (m) return Number(t2);
+    const sign = t2.startsWith("-") ? -1 : 1;
+    const body = t2.replace(/^[+-]/, "");
+    const re = /(\d+(?:\.\d+)?)\s*(d|days?|h|hours?|hrs?|m|mins?|minutes?|s|secs?|seconds?)\b/g;
+    let total = 0;
+    let consumed = "";
+    for (const x of body.matchAll(re)) {
+      const v = Number(x[1]);
+      const u = (x[2] ?? "")[0];
+      total += u === "d" ? v * 86400 : u === "h" ? v * 3600 : u === "m" ? v * 60 : v;
+      consumed += x[0];
+    }
+    if (!consumed || body.replace(/\s+/g, "").length !== consumed.replace(/\s+/g, "").length) return null;
+    return sign * total;
+  }
+
+  // src/core/request.ts
+  function parseNumber(s) {
+    const t2 = s.trim().replace(",", ".").replace("−", "-");
+    return t2 === "" ? NaN : Number(t2);
+  }
+  var Collector = class {
+    errors = [];
+    /** `what` is the string-table key of the field's name. */
+    num(key, s, what, opts = {}) {
+      const v = s.trim() === "" && opts.empty !== void 0 ? opts.empty : parseNumber(s);
+      if (!Number.isFinite(v)) this.errors.push({ key, msg: { key: "val.number", vars: { what: { key: what } } } });
+      else if (opts.min !== void 0 && v < opts.min) this.errors.push({ key, msg: { key: "val.min", vars: { what: { key: what }, min: opts.min } } });
+      return v;
+    }
+    add(key, msgKey, vars) {
+      this.errors.push({ key, msg: { key: msgKey, vars } });
+    }
+  };
+  function tolerance(c, key, text, what) {
+    if (!text.trim()) {
+      c.add(key, "val.tolerance", { what: { key: what } });
+      return NaN;
+    }
+    return c.num(key, text, what, { min: 0 });
+  }
+  function bounded(c, sh, base, what, positive) {
+    const v = c.num(`${sh.id}.${base}`, sh.f[base] ?? "", what);
+    const t2 = tolerance(c, `${sh.id}.${base}t`, sh.f[`${base}t`] ?? "", what);
+    if (positive && Number.isFinite(v) && Number.isFinite(t2) && v - t2 <= 0) {
+      c.add(`${sh.id}.${base}t`, "val.toleranceTooBig", { what: { key: what } });
+    }
+    return { kind: "range", min: v - t2, max: v + t2 };
+  }
+  function buildShadow(c, sh) {
+    const elevation = sh.method === "lengths" ? { method: "lengths", height: bounded(c, sh, "h", "field.height", true), shadow: bounded(c, sh, "l", "field.shadow", true) } : sh.method === "ratio" ? { method: "ratio", ratio: bounded(c, sh, "r", "field.ratio", true) } : { method: "angle", angle: bounded(c, sh, "a", "field.elevation", true) };
+    let azimuth = null;
+    if (sh.azOn && sh.az.trim()) {
+      const v = c.num(`${sh.id}.az`, sh.az, "field.direction");
+      const t2 = tolerance(c, `${sh.id}.azt`, sh.azt, "field.direction");
+      azimuth = {
+        shadow: { kind: "range", min: v - t2, max: v + t2 },
+        reference: sh.azRef,
+        declinationDeg: sh.azRef === "magnetic" ? c.num(`${sh.id}.decl`, sh.decl, "field.declination", { empty: 0 }) : 0
+      };
+    }
+    return {
+      elevation,
+      tipEdge: sh.tip,
+      maxTiltDeg: c.num(`${sh.id}.tilt`, sh.tilt, "field.lean", { empty: 0, min: 0 }),
+      azimuth
+    };
+  }
+  function atmosphere(c, s) {
+    return {
+      pressureHpa: c.num("adv.pressure", s.adv.pressure, "field.pressure", { empty: 1010, min: 1 }),
+      temperatureC: c.num("adv.temp", s.adv.temp, "field.temperature", { empty: 10 }),
+      refraction: s.adv.refraction
+    };
+  }
+  function deltaT(c, s) {
+    return s.adv.deltaT.trim() === "" ? null : c.num("adv.deltaT", s.adv.deltaT, "field.deltaT");
+  }
+  function buildSite(c, s) {
+    const ll = parseLocation(s.site.loc);
+    if (!ll) c.add("site.loc", s.site.loc.trim() ? "val.locationBad" : "val.locationNeeded");
+    const r2 = c.num("site.radius", s.site.radius, "field.radius", { empty: 0, min: 0 });
+    return {
+      lat: ll?.lat ?? NaN,
+      lon: ll?.lon ?? NaN,
+      heightM: c.num("site.height", s.site.height, "field.siteHeight", { empty: 0 }),
+      radiusM: s.site.radiusUnit === "km" ? r2 * 1e3 : r2
+    };
+  }
+  function timeShots(c, s) {
+    return s.shots.map((sh, i) => {
+      const shadow = buildShadow(c, sh);
+      let offsetS = 0;
+      let sigma = 0;
+      if (i > 0 && sh.relation === "other") {
+        const o = parseDuration(sh.offset);
+        if (o === null) c.add(`${sh.id}.offset`, "val.gap");
+        offsetS = o ?? 0;
+        const sg = sh.offsetTol.trim() ? parseDuration(sh.offsetTol) : null;
+        if (sg === null || sg < 0) c.add(`${sh.id}.offsetTol`, "val.gapTolerance");
+        sigma = Math.abs(sg ?? 0);
+      }
+      return { id: sh.id, label: sh.label, shadow, offsetS, timeMs: NaN, timeSigmaS: sigma };
+    });
+  }
+  function buildClaimRequest(s) {
+    const c = new Collector();
+    const site = buildSite(c, s);
+    const p = parseDateTime(s.claim.time);
+    if (!p) c.add("claim.time", s.claim.time.trim() ? "val.dateTimeBad" : "val.claimNeeded");
+    let offsetMin = p?.offsetMin ?? null;
+    if (offsetMin === null && s.claim.offset.trim()) {
+      offsetMin = parseOffset(s.claim.offset);
+      if (offsetMin === null) c.add("claim.offset", "val.offsetBad");
+    }
+    const req = {
+      shots: timeShots(c, s),
+      site,
+      atmosphere: atmosphere(c, s),
+      deltaTOverride: deltaT(c, s),
+      wallClockMs: p?.wallMs ?? NaN,
+      offsetMin
+    };
+    return c.errors.length ? { ok: false, errors: c.errors } : { ok: true, req };
+  }
+  function buildShadowOnly(sh) {
+    const c = new Collector();
+    const shadow = buildShadow(c, sh);
+    return c.errors.length ? null : shadow;
+  }
+
   // src/core/solveLocation.ts
   var KM_PER_DEG = Math.PI / 180 * (EARTH_RADIUS_M / 1e3);
-
-  // src/api/results.ts
-  function timeResults(res) {
-    return {
-      clusters: res.clusters.map(({ probability: _p, ...c }) => c),
-      warnings: res.warnings,
-      observations: res.observations
-    };
-  }
-  function placeResults(res) {
-    return {
-      regions: res.regions.map(({ probability: _p, ...r2 }) => r2),
-      resolutionDeg: res.resolutionDeg,
-      cellCount: res.cells.length,
-      cells: res.cells,
-      warnings: res.warnings,
-      observations: res.observations
-    };
-  }
 
   // src/api/operations.ts
   function invalid(messages) {
     return { ok: false, code: "invalid-case", message: messages.map(formatMessage).join("\n"), messages };
   }
   function built(b) {
-    return b.ok ? { ok: true, value: b.req } : invalid(b.errors.map((e) => e.msg));
+    return b.ok ? { ok: true, value: b.req } : { ...invalid(b.errors.map((e) => e.msg)), fields: b.errors };
   }
   function checkClaim2(state) {
     const req = built(buildClaimRequest(state));
@@ -13163,10 +13045,10 @@
       clearTimeout(timer2);
       timer2 = window.setTimeout(() => {
         if (cases2.state.mode !== "time") return;
-        const b = buildTimeRequest(cases2.state);
-        const zone = b.ok ? b.req.constraints.zone : { kind: "utc" };
-        const lon = b.ok ? b.req.site.lon : 0;
-        updateClaim(cases2, zone, lon, session2.solved?.mode === "time" ? session2.solved.res : null);
+        const solved = session2.solved?.mode === "time" ? session2.solved : null;
+        const zone = solved ? solved.req.constraints.zone : { kind: "utc" };
+        const lon = solved ? solved.req.site.lon : 0;
+        updateClaim(cases2, zone, lon, solved ? solved.res : null);
       }, 250);
     };
     const render = () => {
@@ -14996,11 +14878,11 @@
   var ROW_LIMIT = 30;
   function todRange(c, zone, lon) {
     const mins = c.windows.flatMap((w) => [w.startMs, w.endMs]);
-    const tod2 = (ms) => {
+    const tod = (ms) => {
       const hhmm = fmtTime(ms, zone, lon);
       return Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
     };
-    const vals = mins.map(tod2);
+    const vals = mins.map(tod);
     const lo = Math.min(...vals);
     const hi = Math.max(...vals);
     const f = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
@@ -15598,6 +15480,25 @@
       }
     }
     session2.subscribe(show);
+  }
+
+  // src/api/results.ts
+  function timeResults(res) {
+    return {
+      clusters: res.clusters.map(({ probability: _p, ...c }) => c),
+      warnings: res.warnings,
+      observations: res.observations
+    };
+  }
+  function placeResults(res) {
+    return {
+      regions: res.regions.map(({ probability: _p, ...r2 }) => r2),
+      resolutionDeg: res.resolutionDeg,
+      cellCount: res.cells.length,
+      cells: res.cells,
+      warnings: res.warnings,
+      observations: res.observations
+    };
   }
 
   // src/features/share-export/report.ts
