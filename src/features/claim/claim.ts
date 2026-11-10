@@ -4,13 +4,14 @@
  *
  * Defines: mountClaim() → the collapsible card (placed under the time answer by main.ts).
  * Used by: main.ts.
- * Depends on: api/operations.ts (checkClaim, shared with the command line), core/zone.ts,
- *             core/models.ts, state/case.ts, state/solve.ts, ui/dom.ts,
- *             ui/format.ts, ui/context.ts.
+ * Depends on: api/operations.ts (checkClaim) and core/message.ts (claimLevel), both shared
+ *             with the command line; core/zone.ts, core/models.ts, state/case.ts,
+ *             state/solve.ts, ui/dom.ts, ui/format.ts, ui/context.ts.
  */
 
 import { checkClaim } from "../../api/operations.ts";
 import type { ClaimOffsetResult, TimeSolveResult, Zone } from "../../core/models.ts";
+import { claimLevel } from "../../core/message.ts";
 import { formatOffset } from "../../core/zone.ts";
 import { field, h, icon, info } from "../../ui/dom.ts";
 import { fmtDateTime, fmtSpan } from "../../ui/format.ts";
@@ -61,11 +62,7 @@ function renderClaim(root: HTMLElement, store: CaseStore, invalid: Set<string>, 
   );
 }
 
-function levelText(r: ClaimOffsetResult): string {
-  if (r.acceptedLevel === null) return t("claim.outside");
-  if (r.acceptedLevel === 1) return t("claim.insideBounds");
-  return t("claim.insideLevel", { pct: (r.acceptedLevel * 100).toFixed(r.acceptedLevel > 0.99 ? 1 : 0) });
-}
+const levelText = (r: ClaimOffsetResult): string => tm(claimLevel(r.acceptedLevel));
 
 function nearest(ms: number, res: TimeSolveResult | null): { dist: number; best: number } | null {
   if (!res) return null;

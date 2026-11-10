@@ -4,7 +4,8 @@
  * Defines: setPlatform(), platform(), t(), tm().
  * Used by: main.ts (setPlatform, once, right after startPlatform()); every ui/ and
  *          features/ module that shows text.
- * Depends on: static-web-platform (Platform type), core/models.ts (Message).
+ * Depends on: static-web-platform (Platform type), core/models.ts (Message),
+ *             core/message.ts (renderMessage, shared with the command line).
  *
  * WHY a module-level holder: dozens of render helpers need t(); threading the platform
  * through every call would add noise without adding safety. main.ts sets it before
@@ -13,6 +14,7 @@
 
 import type { Platform } from "static-web-platform";
 import type { Message } from "../core/models.ts";
+import { renderMessage } from "../core/message.ts";
 
 let current: Platform | null = null;
 
@@ -33,8 +35,5 @@ export function t(key: string, vars?: Record<string, string | number>): string {
 
 /** Renders a core message (key + values, values possibly messages themselves). */
 export function tm(m: Message): string {
-  const vars: Record<string, string | number> = {};
-  for (const [k, v] of Object.entries(m.vars ?? {})) vars[k] = typeof v === "object" ? tm(v) : v;
-  const text = t(m.key, vars);
-  return m.shot ? t("msg.forShadow", { shot: m.shot, text }) : text;
+  return renderMessage(m, t);
 }

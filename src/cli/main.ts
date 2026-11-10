@@ -3,7 +3,8 @@
  *
  * Defines: nothing of its own; starts the commands and re-exports api/, so the bundle is
  *          also the library.
- * Used by: `deno run --no-config --no-prompt --allow-read shadowclock-cli.js <command> FILE`.
+ * Used by: `deno run --no-config --no-prompt --allow-read shadowclock-cli.js <command> FILE`
+ *          (add `--allow-write=FILE` for `--out FILE`).
  * Depends on: static-web-platform/cli (startCli: grammar, help, I/O, exit codes),
  *             cli/commands.ts, api/.
  *

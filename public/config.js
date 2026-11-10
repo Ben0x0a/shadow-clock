@@ -14,7 +14,7 @@ window.__SWP_SITE__ = {
   },
   "options": {},
   "mode": "site",
-  "version": "923efecc21ca",
+  "version": "3762a808e038",
   "date": "2026-11-10",
   "assets": [],
   "distribution": "single",

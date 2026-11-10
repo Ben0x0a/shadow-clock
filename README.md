@@ -40,6 +40,8 @@ shadowclock example --name paris > case.json      # a built-in case to start fro
 shadowclock find-time --format text case.json     # known place → compatible times
 shadowclock find-place athens.json                # known times → compatible places (JSON)
 shadowclock check-claim --format text case.json   # the case's claimed time vs the shadows
+deno run --no-config --no-prompt --allow-read --allow-write=result.json shadowclock-cli.js \
+  find-time --out result.json case.json           # --out needs write access to that file only
 ```
 
 | Command | Operation (`src/api/`) | Input |
@@ -55,7 +57,8 @@ shadowclock check-claim --format text case.json   # the case's claimed time vs t
   command says what to compute. `-` reads standard input.
 - **Output:** JSON by default, with the solver request and the results in the same shape
   as the page's report (`src/api/results.ts`); `--format text` for reading;
-  `--out FILE` (`--force` to replace).
+  `--out FILE` (`--force` to replace) needs `--allow-write=FILE` added to the Deno
+  command; standard output needs no write permission.
 - **Exit codes:** `0` success, `1` invalid input (code `not-json`, `not-a-case`,
   `invalid-case` with every field error, `unknown-example`), `2` usage error, `3`
   internal error.
@@ -160,7 +163,7 @@ of a US provider (`_headers` then translates into that server's configuration).
 | Library | Version | Source | Licence |
 |---|---|---|---|
 | Leaflet | 1.9.4 | npm, pinned by `package-lock.json`; script bundled into `app.js`, stylesheet into `app.css` (its images embedded) | BSD-2-Clause |
-| static-web-platform | 2.0.0 | `platform/` submodule (shared base: consent, storage, sharing, dialogs, build, gate) | see its repository |
+| static-web-platform | 2.0.1 | `platform/` submodule (shared base: consent, storage, sharing, dialogs, build, gate) | see its repository |
 
 Nothing else from `node_modules/` is shipped: TypeScript, esbuild and Playwright are build
 and test tools only, pinned by `package-lock.json`.
@@ -192,11 +195,14 @@ and test tools only, pinned by `package-lock.json`.
    solver worker starts from a `blob:` URL, and OpenStreetMap serves tiles to a page
    without a Referer (checked in Chrome on 2026-11-10). The single file needs no runtime.
 9. **One path through `api/`.** The page and the command line call the same operations:
-   the page sends the case to the worker (`state/solve.ts` → `workers/solver.ts`), which
-   runs `findTime` / `findPlace`; the claim check calls `checkClaim`; the report and the
-   command line export results with the same functions. Form validation runs in the
-   worker too (errors come back with the field they mark), so the page shows *Computing…*
-   only once the worker reports progress, not on every keystroke.
+   the page sends the case to its Web Worker (`state/solve.ts` → `workers/solver.ts`, a
+   background thread in the browser), which runs `findTime` / `findPlace`; the claim
+   check calls `checkClaim`; the report and the command line export results with the same
+   functions, and render messages with the same `core/message.ts`. The page also
+   validates the case before sending it, with the same core builders the operations use,
+   so field errors show at once and do not depend on the worker; a valid case is shown as
+   running at once, so an earlier answer is never shown as current. The report includes
+   results only when they belong to the current inputs.
 
 ## Not tested automatically
 

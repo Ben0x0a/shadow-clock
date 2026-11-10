@@ -3,18 +3,19 @@
  *
  * Defines: JobRunner, SolveSession (live solving of the case), Solved, SolveStatus.
  * Used by: main.ts; features/results, features/claim, features/share-export.
- * Depends on: core/protocol.ts, core/models.ts, core/request.ts (FieldError), state/case.ts.
+ * Depends on: core/protocol.ts, core/models.ts, core/request.ts (validation), state/case.ts.
  *
  * HOW: a new job terminates the running worker and starts a fresh one, so stale results
  * can never arrive after newer inputs. Message ids guard against late messages too.
- * The worker validates and solves through the api/ operations (the command line's path),
- * so this layer only sends the case and publishes what comes back.
+ * The case is validated here first (inline errors at once, worker or not); a valid case
+ * goes to the worker, which solves it through the api/ operations (the command line's
+ * path) and validates it again with the same core builders.
  */
 
 import type { AppState } from "../core/form.ts";
 import type { LocationSolveRequest, LocationSolveResult, Message, TimeSolveRequest, TimeSolveResult } from "../core/models.ts";
 import type { WorkerMessage, WorkerRequest } from "../core/protocol.ts";
-import type { FieldError } from "../core/request.ts";
+import { buildPlaceRequest, buildTimeRequest, type FieldError } from "../core/request.ts";
 import type { CaseStore } from "./case.ts";
 
 type Handlers = {
@@ -112,9 +113,14 @@ export class SolveSession {
   solve(): void {
     clearTimeout(this.timer);
     const s = this.cases.state;
-    // WHY no "running" status here: validation now happens in the worker, and an invalid
-    // case answers within milliseconds; publishing "running" first would flash the stale
-    // look and "Computing…" on every keystroke. The first progress message shows it.
+    // WHY validate here as well as in the worker: form errors must show at once and must
+    // not depend on the worker (it may fail to start); both sides call the same core
+    // builders the api/ operations use, so the rules cannot differ.
+    const built = s.mode === "time" ? buildTimeRequest(s) : buildPlaceRequest(s);
+    if (!built.ok) return this.rejected(built.errors);
+    // A valid case is shown as running at once, so the previous answer (kept in `solved`)
+    // is marked stale and never looks current next to the new inputs.
+    this.publish({ kind: "running", fraction: 0, phase: null });
     this.jobs.run({ kind: s.mode, state: s }, {
       progress: (fraction, phase) => this.publish({ kind: "running", fraction, phase }),
       done: (m) => {
@@ -122,16 +128,18 @@ export class SolveSession {
         this.solved = m.type === "time" ? { mode: "time", req: m.req, res: m.result } : { mode: "place", req: m.req, res: m.result };
         this.publish({ kind: "done", solved: this.solved });
       },
-      invalid: (errors) => {
-        this.invalid = new Set(errors.map((e) => e.key));
-        this.solved = null;
-        this.publish({ kind: "invalid", errors });
-      },
+      invalid: (errors) => this.rejected(errors),
       error: (error) => {
         this.invalid = new Set();
         this.solved = null;
         this.publish({ kind: "error", error });
       },
     });
+  }
+
+  private rejected(errors: FieldError[]): void {
+    this.invalid = new Set(errors.map((e) => e.key));
+    this.solved = null;
+    this.publish({ kind: "invalid", errors });
   }
 }

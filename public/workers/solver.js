@@ -410,8 +410,8 @@
     [-3, 0, 0, 0]
   ];
   function norm360(deg) {
-    const r2 = deg % 360;
-    return r2 < 0 ? r2 + 360 : r2;
+    const r = deg % 360;
+    return r < 0 ? r + 360 : r;
   }
   function angleDiff(a, b) {
     let d = (a - b) % 360;
@@ -515,9 +515,6 @@
     let hourAngle = norm360(HpR / DEG);
     if (hourAngle > 180) hourAngle -= 360;
     return { elevation: e0 + de, elevationTrue: e0, azimuth, hourAngle };
-  }
-  function sunPosition(ms, deltaT2, lat, lon, heightM, atm, refraction = true) {
-    return topocentricSun(geocentricSun(ms, deltaT2), lat, lon, heightM, atm, refraction);
   }
 
   // src/core/ephemeris.ts
@@ -701,9 +698,9 @@
         }
         const comps = [];
         const ranges = [];
-        const add = (c, r2, d) => {
-          if (c.kind === "gauss") comps.push({ c, r: r2, d });
-          else ranges.push({ c, r: r2, d });
+        const add = (c, r, d) => {
+          if (c.kind === "gauss") comps.push({ c, r, d });
+          else ranges.push({ c, r, d });
         };
         add(obs.elevation, rEl, [dt.el, dn.el, de.el]);
         if (obs.azimuth) add(obs.azimuth, rAz, [dt.az, dn.az, de.az]);
@@ -711,10 +708,10 @@
         const varP = (radiusM / 2) ** 2;
         const [first, second] = comps;
         if (first && !second) {
-          const { c, r: r2, d } = first;
+          const { c, r, d } = first;
           const v = c.sigma ** 2 + d[0] ** 2 * varT + (d[1] ** 2 + d[2] ** 2) * varP;
-          chi2 += r2 * r2 / v;
-          logL += -0.5 * (r2 * r2) / v - 0.5 * Math.log(v);
+          chi2 += r * r / v;
+          logL += -0.5 * (r * r) / v - 0.5 * Math.log(v);
         } else if (first && second) {
           const a = first;
           const b = second;
@@ -726,9 +723,9 @@
           chi2 += q;
           logL += -0.5 * q - 0.5 * Math.log(det);
         }
-        for (const { c, r: r2, d } of ranges) {
+        for (const { c, r, d } of ranges) {
           const half = c.half + Math.abs(d[0]) * timeSigmaS + radiusM * Math.hypot(d[1], d[2]);
-          const u = half > 0 ? Math.abs(r2) / half : r2 === 0 ? 0 : Infinity;
+          const u = half > 0 ? Math.abs(r) / half : r === 0 ? 0 : Infinity;
           if (u > rangeU) rangeU = u;
         }
         shotFits.push({
@@ -768,12 +765,12 @@
       const obs = at(this.shots, i).obs;
       const s = this.sun(geo, lat, lon);
       if (!obs.azimuth) return Math.abs(s.elevation - obs.elevation.centre);
-      const r2 = Math.PI / 180;
-      const e1 = s.elevation * r2;
-      const e2 = obs.elevation.centre * r2;
-      const da = (s.azimuth - obs.azimuth.centre) * r2;
+      const r = Math.PI / 180;
+      const e1 = s.elevation * r;
+      const e2 = obs.elevation.centre * r;
+      const da = (s.azimuth - obs.azimuth.centre) * r;
       const cosd = Math.sin(e1) * Math.sin(e2) + Math.cos(e1) * Math.cos(e2) * Math.cos(da);
-      return Math.acos(Math.min(1, Math.max(-1, cosd))) / r2;
+      return Math.acos(Math.min(1, Math.max(-1, cosd))) / r;
     }
     get shotCount() {
       return this.shots.length;
@@ -829,11 +826,11 @@
       const err2 = valid(e.ratio, true);
       if (err2) return fieldError("core.field.ratio", err2);
       if (e.ratio.kind === "gauss") {
-        const r2 = e.ratio.value;
+        const r = e.ratio.value;
         return {
           kind: "gauss",
-          centre: Math.atan(r2) / DEG2,
-          items: [{ label: "budget.ratio", amount: e.ratio.sigma / (1 + r2 * r2) / DEG2 }]
+          centre: Math.atan(r) / DEG2,
+          items: [{ label: "budget.ratio", amount: e.ratio.sigma / (1 + r * r) / DEG2 }]
         };
       }
       const lo = Math.atan(e.ratio.min) / DEG2;
@@ -886,8 +883,8 @@
     else items.push({ label: "budget.tipMidpoint", amount: uniform(kind, sd / 2) });
     if (s.maxTiltDeg > 0) items.push({ label: "budget.tilt", amount: uniform(kind, s.maxTiltDeg) });
     if (refraction) {
-      const r2 = refractionDeg(centre);
-      const amt = kind === "gauss" ? REFRACTION_REL_SIGMA * r2 : 2 * REFRACTION_REL_SIGMA * r2;
+      const r = refractionDeg(centre);
+      const amt = kind === "gauss" ? REFRACTION_REL_SIGMA * r : 2 * REFRACTION_REL_SIGMA * r;
       items.push({ label: "budget.refraction", amount: amt });
     }
     if (centre <= 0) return { ok: false, error: { key: "core.err.belowHorizon" } };
@@ -997,9 +994,9 @@
     if (shots.length === 0) return { ok: false, error: { key: "core.err.noShadow" } };
     const observations = [];
     for (const s of shots) {
-      const r2 = buildObservation(s.shadow, atm.refraction);
-      if (!r2.ok) return { ok: false, error: { ...r2.error, shot: s.label } };
-      observations.push(r2.obs);
+      const r = buildObservation(s.shadow, atm.refraction);
+      if (!r.ok) return { ok: false, error: { ...r.error, shot: s.label } };
+      observations.push(r.obs);
     }
     return { ok: true, observations };
   }
@@ -1224,10 +1221,10 @@
     }
     const groups = /* @__PURE__ */ new Map();
     items.forEach((it, i) => {
-      const r2 = find(i);
-      const g = groups.get(r2);
+      const r = find(i);
+      const g = groups.get(r);
       if (g) g.push(it);
-      else groups.set(r2, [it]);
+      else groups.set(r, [it]);
     });
     const clusters = [];
     let id = 0;
@@ -1319,163 +1316,6 @@
     }
     return [...w.values()];
   }
-
-  // src/core/form.ts
-  var shotCounter = 0;
-  function newShot(label) {
-    return {
-      id: `s${Date.now().toString(36)}${(shotCounter++).toString(36)}`,
-      label,
-      relation: "same",
-      offset: "",
-      offsetTol: "",
-      time: "",
-      timeOffset: "+00:00",
-      timeTol: "",
-      method: "lengths",
-      f: { h: "", ht: "", l: "", lt: "", r: "", rt: "", a: "", at: "" },
-      tip: "unknown",
-      tilt: "1",
-      azOn: true,
-      az: "",
-      azt: "",
-      azRef: "true",
-      decl: "0"
-    };
-  }
-  function defaultState(firstShotLabel) {
-    const y = String((/* @__PURE__ */ new Date()).getUTCFullYear());
-    return {
-      v: 1,
-      mode: "time",
-      site: { loc: "", radius: "100", radiusUnit: "m", height: "0" },
-      shots: [newShot(firstShotLabel)],
-      cons: {
-        yearFrom: y,
-        yearTo: y,
-        zoneKind: "utc",
-        zoneValue: "",
-        months: Array(12).fill(true),
-        todFrom: "",
-        todTo: "",
-        notBefore: "",
-        notAfter: ""
-      },
-      adv: { pressure: "1010", temp: "10", refraction: true, deltaT: "" },
-      claim: { time: "", offset: "" },
-      search: { kind: "world", bbox: "" }
-    };
-  }
-
-  // src/core/examples.ts
-  var ATM = { pressureHpa: 1010, temperatureC: 10, refraction: true };
-  function sunAt(ms, lat, lon) {
-    return sunPosition(ms, deltaTSeconds(decimalYear(ms)), lat, lon, 0, ATM, true);
-  }
-  var r = (v, d) => v.toFixed(d);
-  function lengthsShot(t, i, ms, lat, lon, H, tH, tL, tAz) {
-    const s = sunAt(ms, lat, lon);
-    const L = H / Math.tan(s.elevation * Math.PI / 180);
-    const sh = newShot(t("shot.default", { n: i + 1 }));
-    sh.method = "lengths";
-    sh.f.h = r(H, 2);
-    sh.f.ht = r(tH, 2);
-    sh.f.l = r(L, 2);
-    sh.f.lt = r(tL, 2);
-    sh.tip = "midpoint";
-    sh.tilt = "0.5";
-    sh.azOn = tAz !== null;
-    sh.az = tAz !== null ? r((s.azimuth + 180) % 360, 1) : "";
-    sh.azt = tAz !== null ? r(tAz, 1) : "";
-    return sh;
-  }
-  var EXAMPLES = [
-    {
-      label: "ex.paris",
-      description: "ex.parisDesc",
-      build(t) {
-        const lat = 48.8584, lon = 2.2945, ms = Date.UTC(2025, 3, 15, 9, 20);
-        const s = defaultState(t("shot.default", { n: 1 }));
-        s.site.loc = `${lat}, ${lon}`;
-        s.site.radius = "200";
-        s.cons.yearFrom = s.cons.yearTo = "2025";
-        s.cons.zoneKind = "iana";
-        s.cons.zoneValue = "Europe/Paris";
-        const a = lengthsShot(t, 0, ms, lat, lon, 1.2, 0.02, 0.04, 4);
-        a.label = t("ex.bollard");
-        const b = lengthsShot(t, 1, ms, lat, lon, 5.4, 0.1, 0.16, 3);
-        b.label = t("ex.lamp");
-        b.relation = "same";
-        s.shots = [a, b];
-        s.claim.time = "2025:04:15 11:20:00";
-        return s;
-      }
-    },
-    {
-      label: "ex.sydney",
-      description: "ex.sydneyDesc",
-      build(t) {
-        const lat = -33.8568, lon = 151.2153, ms = Date.UTC(2024, 11, 10, 1, 30);
-        const s = defaultState(t("shot.default", { n: 1 }));
-        s.site.loc = `${lat}, ${lon}`;
-        s.cons.yearFrom = s.cons.yearTo = "2024";
-        s.cons.zoneKind = "iana";
-        s.cons.zoneValue = "Australia/Sydney";
-        const a = lengthsShot(t, 0, ms, lat, lon, 1.8, 0.04, 0.06, 4);
-        a.label = t("ex.post1");
-        const b = lengthsShot(t, 1, ms + 81e5, lat, lon, 1.8, 0.04, 0.06, 4);
-        b.label = t("ex.post2");
-        b.relation = "other";
-        b.offset = "+02:15:00";
-        b.offsetTol = "2 s";
-        s.shots = [a, b];
-        return s;
-      }
-    },
-    {
-      label: "ex.tromso",
-      description: "ex.tromsoDesc",
-      build(t) {
-        const lat = 69.6492, lon = 18.9553, ms = Date.UTC(2024, 7, 20, 10, 0);
-        const e = sunAt(ms, lat, lon).elevation;
-        const ratio = Math.tan(e * Math.PI / 180);
-        const s = defaultState(t("shot.default", { n: 1 }));
-        s.site.loc = `${lat}, ${lon}`;
-        s.site.radius = "2";
-        s.site.radiusUnit = "km";
-        s.cons.yearFrom = s.cons.yearTo = "2024";
-        const a = newShot(t("ex.building"));
-        a.label = t("ex.building");
-        a.method = "ratio";
-        a.f.r = r(ratio, 3);
-        a.f.rt = r(ratio * 0.03, 3);
-        a.azOn = false;
-        a.tip = "unknown";
-        s.shots = [a];
-        return s;
-      }
-    },
-    {
-      label: "ex.athens",
-      description: "ex.athensDesc",
-      build(t) {
-        const lat = 37.9715, lon = 23.7257;
-        const times = [Date.UTC(2023, 5, 2, 6, 30), Date.UTC(2023, 5, 2, 9, 45), Date.UTC(2023, 5, 2, 14, 10)];
-        const s = defaultState(t("shot.default", { n: 1 }));
-        s.mode = "place";
-        s.shots = times.map((ms, i) => {
-          const sh = lengthsShot(t, i, ms, lat, lon, 2, 0.02, 0.04, null);
-          sh.label = t("shot.photo", { n: i + 1 });
-          const d = new Date(ms);
-          sh.time = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:00`;
-          sh.timeOffset = "+00:00";
-          sh.timeTol = "30 s";
-          return sh;
-        });
-        return s;
-      }
-    }
-  ];
 
   // src/core/parse.ts
   var NUM = String.raw`-?\d+(?:\.\d+)?`;
@@ -1674,12 +1514,12 @@
   function buildSite(c, s) {
     const ll = parseLocation(s.site.loc);
     if (!ll) c.add("site.loc", s.site.loc.trim() ? "val.locationBad" : "val.locationNeeded");
-    const r2 = c.num("site.radius", s.site.radius, "field.radius", { empty: 0, min: 0 });
+    const r = c.num("site.radius", s.site.radius, "field.radius", { empty: 0, min: 0 });
     return {
       lat: ll?.lat ?? NaN,
       lon: ll?.lon ?? NaN,
       heightM: c.num("site.height", s.site.height, "field.siteHeight", { empty: 0 }),
-      radiusM: s.site.radiusUnit === "km" ? r2 * 1e3 : r2
+      radiusM: s.site.radiusUnit === "km" ? r * 1e3 : r
     };
   }
   function buildZone(c, s) {
@@ -1934,10 +1774,18 @@
         logW
       });
     }
-    const m = Math.max(...regions.map((r2) => r2.logW));
-    const sum = regions.reduce((a, r2) => a + Math.exp(r2.logW - m), 0);
+    const m = Math.max(...regions.map((r) => r.logW));
+    const sum = regions.reduce((a, r) => a + Math.exp(r.logW - m), 0);
     regions.sort((a, b) => b.logW - a.logW);
-    return regions.map(({ logW, ...r2 }, i) => ({ ...r2, id: i, probability: Math.exp(logW - m) / sum }));
+    return regions.map(({ logW, ...r }, i) => ({ ...r, id: i, probability: Math.exp(logW - m) / sum }));
+  }
+
+  // src/core/message.ts
+  function renderMessage(m, tr) {
+    const vars = {};
+    for (const [k, v] of Object.entries(m.vars ?? {})) vars[k] = typeof v === "object" ? renderMessage(v, tr) : v;
+    const text = tr(m.key, vars);
+    return m.shot ? tr("msg.forShadow", { shot: m.shot, text }) : text;
   }
 
   // src/api/messages.ts
@@ -2043,7 +1891,19 @@
     "ex.tromsoDesc": "Tromsø, 20 Aug 2024 10:00 UTC. Only the ratio of a building's height to its shadow is known, with a tolerance.",
     "ex.building": "Building",
     "ex.athens": "Find the place: three photos",
-    "ex.athensDesc": "Athens, 2 Jun 2023 at 06:30, 09:45 and 14:10 UTC. Elevation only — the three rings cross at one place."
+    "ex.athensDesc": "Athens, 2 Jun 2023 at 06:30, 09:45 and 14:10 UTC. Elevation only — the three rings cross at one place.",
+    // ---- Progress phases (sent by the solvers while they run)
+    "progress.scanning": "Scanning {year}",
+    "progress.refining": "Refining {year}",
+    "progress.heatmap": "Drawing the year map",
+    "progress.map": "Refining the map",
+    "progress.regions": "Grouping areas",
+    // ---- Claimed-time verdict levels
+    "claim.consistent": "Consistent with the shadows",
+    "claim.inconsistent": "Not consistent with the shadows",
+    "claim.outside": "outside the 99.7 % region",
+    "claim.insideBounds": "inside all bounds",
+    "claim.insideLevel": "inside the {pct} % region"
   };
   function translate(key, vars = {}) {
     const text = MESSAGES[key];
@@ -2051,10 +1911,7 @@
     return text.replace(/\{(\w+)\}/g, (all, name) => name in vars ? String(vars[name]) : all);
   }
   function formatMessage(m) {
-    const vars = {};
-    for (const [k, v] of Object.entries(m.vars ?? {})) vars[k] = typeof v === "object" ? formatMessage(v) : v;
-    const text = translate(m.key, vars);
-    return m.shot ? translate("msg.forShadow", { shot: m.shot, text }) : text;
+    return renderMessage(m, translate);
   }
 
   // src/api/operations.ts
@@ -2067,36 +1924,35 @@
   function findTime(state, progress) {
     const req = built(buildTimeRequest(state));
     if (!req.ok) return req;
-    const r2 = solveTime(req.value, progress);
-    return r2.ok ? { ok: true, value: { request: req.value, result: r2.result } } : invalid([r2.error]);
+    const r = solveTime(req.value, progress);
+    return r.ok ? { ok: true, value: { request: req.value, result: r.result } } : invalid([r.error]);
   }
   function findPlace(state, progress) {
     const req = built(buildPlaceRequest(state));
     if (!req.ok) return req;
-    const r2 = solveLocation(req.value, progress);
-    return r2.ok ? { ok: true, value: { request: req.value, result: r2.result } } : invalid([r2.error]);
+    const r = solveLocation(req.value, progress);
+    return r.ok ? { ok: true, value: { request: req.value, result: r.result } } : invalid([r.error]);
   }
-  var EXAMPLE_NAMES = EXAMPLES.map((e) => e.label.replace(/^ex\./, ""));
 
   // src/workers/solver.ts
   var post = (m, transfer = []) => self.postMessage(m, transfer);
-  function failure(id, r2) {
-    if (r2.fields) post({ id, type: "invalid", errors: r2.fields });
-    else post({ id, type: "error", error: r2.messages?.[0] ?? { key: "core.err.internal", vars: { detail: r2.message } } });
+  function failure(id, r) {
+    if (r.fields) post({ id, type: "invalid", errors: r.fields });
+    else post({ id, type: "error", error: r.messages?.[0] ?? { key: "core.err.internal", vars: { detail: r.message } } });
   }
   self.onmessage = (ev) => {
     const { id, kind, state } = ev.data;
     const progress = (fraction, phase) => post({ id, type: "progress", fraction, phase });
     try {
       if (kind === "time") {
-        const r2 = findTime(state, progress);
-        if (!r2.ok) return failure(id, r2);
-        const { request, result } = r2.value;
+        const r = findTime(state, progress);
+        if (!r.ok) return failure(id, r);
+        const { request, result } = r.value;
         post({ id, type: "time", req: request, result }, result.heatmap ? [result.heatmap.values.buffer] : []);
       } else {
-        const r2 = findPlace(state, progress);
-        if (!r2.ok) return failure(id, r2);
-        post({ id, type: "place", req: r2.value.request, result: r2.value.result });
+        const r = findPlace(state, progress);
+        if (!r.ok) return failure(id, r);
+        post({ id, type: "place", req: r.value.request, result: r.value.result });
       }
     } catch (e) {
       post({ id, type: "error", error: { key: "core.err.internal", vars: { detail: e instanceof Error ? e.message : String(e) } } });

@@ -2,8 +2,9 @@
  * text.ts — the command line's `--format text` rendering (JSON is the default output).
  *
  * Defines: timeText(), placeText(), claimText().
- * Used by: cli/main.ts.
- * Depends on: api/ (value types, formatMessage), core/zone.ts, core/models.ts.
+ * Used by: cli/commands.ts.
+ * Depends on: api/ (value types, formatMessage), core/message.ts (claimLevel, as the page),
+ *             core/zone.ts, core/models.ts.
  *
  * HOW: times are printed in UTC to the second, and also in the case's display zone
  * (offset, IANA zone or local mean solar time) when that is not UTC. Warnings follow the
@@ -12,6 +13,7 @@
 
 import { type ClaimValue, formatMessage, type PlaceValue, type TimeValue } from "../api/index.ts";
 import type { ClaimOffsetResult, Message, Zone } from "../core/models.ts";
+import { claimLevel } from "../core/message.ts";
 import { formatOffset, zoneOffsetMin } from "../core/zone.ts";
 
 const utc = (ms: number) => `${new Date(ms).toISOString().slice(0, 19).replace("T", " ")} UTC`;
@@ -49,10 +51,10 @@ export function placeText(v: PlaceValue): string {
   return head + lines.join("") + warnings(r.warnings);
 }
 
+/** The page's wording: the level, then the verdict. */
 function level(r: ClaimOffsetResult): string {
-  if (r.acceptedLevel === null) return "outside the 99.7 % region: inconsistent";
-  if (r.acceptedLevel === 1) return "inside every declared bound: consistent";
-  return `inside the ${(r.acceptedLevel * 100).toFixed(r.acceptedLevel > 0.99 ? 1 : 0)} % region: consistent`;
+  const verdict = formatMessage({ key: r.acceptedLevel !== null ? "claim.consistent" : "claim.inconsistent" });
+  return `${formatMessage(claimLevel(r.acceptedLevel))}: ${verdict}`;
 }
 
 export function claimText(v: ClaimValue): string {

@@ -3378,8 +3378,8 @@ dialog li {
     [-3, 0, 0, 0]
   ];
   function norm360(deg) {
-    const r2 = deg % 360;
-    return r2 < 0 ? r2 + 360 : r2;
+    const r = deg % 360;
+    return r < 0 ? r + 360 : r;
   }
   function angleDiff(a, b) {
     let d = (a - b) % 360;
@@ -3483,9 +3483,6 @@ dialog li {
     let hourAngle = norm360(HpR / DEG);
     if (hourAngle > 180) hourAngle -= 360;
     return { elevation: e0 + de, elevationTrue: e0, azimuth, hourAngle };
-  }
-  function sunPosition(ms, deltaT2, lat, lon, heightM, atm, refraction = true) {
-    return topocentricSun(geocentricSun(ms, deltaT2), lat, lon, heightM, atm, refraction);
   }
 
   // src/core/ephemeris.ts
@@ -3669,9 +3666,9 @@ dialog li {
         }
         const comps = [];
         const ranges = [];
-        const add = (c, r2, d) => {
-          if (c.kind === "gauss") comps.push({ c, r: r2, d });
-          else ranges.push({ c, r: r2, d });
+        const add = (c, r, d) => {
+          if (c.kind === "gauss") comps.push({ c, r, d });
+          else ranges.push({ c, r, d });
         };
         add(obs.elevation, rEl, [dt.el, dn.el, de.el]);
         if (obs.azimuth) add(obs.azimuth, rAz, [dt.az, dn.az, de.az]);
@@ -3679,10 +3676,10 @@ dialog li {
         const varP = (radiusM / 2) ** 2;
         const [first, second] = comps;
         if (first && !second) {
-          const { c, r: r2, d } = first;
+          const { c, r, d } = first;
           const v = c.sigma ** 2 + d[0] ** 2 * varT + (d[1] ** 2 + d[2] ** 2) * varP;
-          chi2 += r2 * r2 / v;
-          logL += -0.5 * (r2 * r2) / v - 0.5 * Math.log(v);
+          chi2 += r * r / v;
+          logL += -0.5 * (r * r) / v - 0.5 * Math.log(v);
         } else if (first && second) {
           const a = first;
           const b = second;
@@ -3694,9 +3691,9 @@ dialog li {
           chi2 += q;
           logL += -0.5 * q - 0.5 * Math.log(det);
         }
-        for (const { c, r: r2, d } of ranges) {
+        for (const { c, r, d } of ranges) {
           const half = c.half + Math.abs(d[0]) * timeSigmaS + radiusM * Math.hypot(d[1], d[2]);
-          const u = half > 0 ? Math.abs(r2) / half : r2 === 0 ? 0 : Infinity;
+          const u = half > 0 ? Math.abs(r) / half : r === 0 ? 0 : Infinity;
           if (u > rangeU) rangeU = u;
         }
         shotFits.push({
@@ -3736,12 +3733,12 @@ dialog li {
       const obs = at(this.shots, i).obs;
       const s = this.sun(geo, lat, lon);
       if (!obs.azimuth) return Math.abs(s.elevation - obs.elevation.centre);
-      const r2 = Math.PI / 180;
-      const e1 = s.elevation * r2;
-      const e2 = obs.elevation.centre * r2;
-      const da = (s.azimuth - obs.azimuth.centre) * r2;
+      const r = Math.PI / 180;
+      const e1 = s.elevation * r;
+      const e2 = obs.elevation.centre * r;
+      const da = (s.azimuth - obs.azimuth.centre) * r;
       const cosd = Math.sin(e1) * Math.sin(e2) + Math.cos(e1) * Math.cos(e2) * Math.cos(da);
-      return Math.acos(Math.min(1, Math.max(-1, cosd))) / r2;
+      return Math.acos(Math.min(1, Math.max(-1, cosd))) / r;
     }
     get shotCount() {
       return this.shots.length;
@@ -3797,11 +3794,11 @@ dialog li {
       const err2 = valid(e.ratio, true);
       if (err2) return fieldError("core.field.ratio", err2);
       if (e.ratio.kind === "gauss") {
-        const r2 = e.ratio.value;
+        const r = e.ratio.value;
         return {
           kind: "gauss",
-          centre: Math.atan(r2) / DEG2,
-          items: [{ label: "budget.ratio", amount: e.ratio.sigma / (1 + r2 * r2) / DEG2 }]
+          centre: Math.atan(r) / DEG2,
+          items: [{ label: "budget.ratio", amount: e.ratio.sigma / (1 + r * r) / DEG2 }]
         };
       }
       const lo = Math.atan(e.ratio.min) / DEG2;
@@ -3854,8 +3851,8 @@ dialog li {
     else items.push({ label: "budget.tipMidpoint", amount: uniform(kind, sd / 2) });
     if (s.maxTiltDeg > 0) items.push({ label: "budget.tilt", amount: uniform(kind, s.maxTiltDeg) });
     if (refraction) {
-      const r2 = refractionDeg(centre);
-      const amt = kind === "gauss" ? REFRACTION_REL_SIGMA * r2 : 2 * REFRACTION_REL_SIGMA * r2;
+      const r = refractionDeg(centre);
+      const amt = kind === "gauss" ? REFRACTION_REL_SIGMA * r : 2 * REFRACTION_REL_SIGMA * r;
       items.push({ label: "budget.refraction", amount: amt });
     }
     if (centre <= 0) return { ok: false, error: { key: "core.err.belowHorizon" } };
@@ -3965,9 +3962,9 @@ dialog li {
     if (shots.length === 0) return { ok: false, error: { key: "core.err.noShadow" } };
     const observations = [];
     for (const s of shots) {
-      const r2 = buildObservation(s.shadow, atm.refraction);
-      if (!r2.ok) return { ok: false, error: { ...r2.error, shot: s.label } };
-      observations.push(r2.obs);
+      const r = buildObservation(s.shadow, atm.refraction);
+      if (!r.ok) return { ok: false, error: { ...r.error, shot: s.label } };
+      observations.push(r.obs);
     }
     return { ok: true, observations };
   }
@@ -4192,10 +4189,10 @@ dialog li {
     }
     const groups = /* @__PURE__ */ new Map();
     items.forEach((it, i) => {
-      const r2 = find(i);
-      const g = groups.get(r2);
+      const r = find(i);
+      const g = groups.get(r);
       if (g) g.push(it);
-      else groups.set(r2, [it]);
+      else groups.set(r, [it]);
     });
     const clusters = [];
     let id = 0;
@@ -4287,163 +4284,6 @@ dialog li {
     }
     return [...w.values()];
   }
-
-  // src/core/form.ts
-  var shotCounter = 0;
-  function newShot(label) {
-    return {
-      id: `s${Date.now().toString(36)}${(shotCounter++).toString(36)}`,
-      label,
-      relation: "same",
-      offset: "",
-      offsetTol: "",
-      time: "",
-      timeOffset: "+00:00",
-      timeTol: "",
-      method: "lengths",
-      f: { h: "", ht: "", l: "", lt: "", r: "", rt: "", a: "", at: "" },
-      tip: "unknown",
-      tilt: "1",
-      azOn: true,
-      az: "",
-      azt: "",
-      azRef: "true",
-      decl: "0"
-    };
-  }
-  function defaultState(firstShotLabel) {
-    const y = String((/* @__PURE__ */ new Date()).getUTCFullYear());
-    return {
-      v: 1,
-      mode: "time",
-      site: { loc: "", radius: "100", radiusUnit: "m", height: "0" },
-      shots: [newShot(firstShotLabel)],
-      cons: {
-        yearFrom: y,
-        yearTo: y,
-        zoneKind: "utc",
-        zoneValue: "",
-        months: Array(12).fill(true),
-        todFrom: "",
-        todTo: "",
-        notBefore: "",
-        notAfter: ""
-      },
-      adv: { pressure: "1010", temp: "10", refraction: true, deltaT: "" },
-      claim: { time: "", offset: "" },
-      search: { kind: "world", bbox: "" }
-    };
-  }
-
-  // src/core/examples.ts
-  var ATM = { pressureHpa: 1010, temperatureC: 10, refraction: true };
-  function sunAt(ms, lat, lon) {
-    return sunPosition(ms, deltaTSeconds(decimalYear(ms)), lat, lon, 0, ATM, true);
-  }
-  var r = (v, d) => v.toFixed(d);
-  function lengthsShot(t, i, ms, lat, lon, H, tH, tL, tAz) {
-    const s = sunAt(ms, lat, lon);
-    const L = H / Math.tan(s.elevation * Math.PI / 180);
-    const sh = newShot(t("shot.default", { n: i + 1 }));
-    sh.method = "lengths";
-    sh.f.h = r(H, 2);
-    sh.f.ht = r(tH, 2);
-    sh.f.l = r(L, 2);
-    sh.f.lt = r(tL, 2);
-    sh.tip = "midpoint";
-    sh.tilt = "0.5";
-    sh.azOn = tAz !== null;
-    sh.az = tAz !== null ? r((s.azimuth + 180) % 360, 1) : "";
-    sh.azt = tAz !== null ? r(tAz, 1) : "";
-    return sh;
-  }
-  var EXAMPLES = [
-    {
-      label: "ex.paris",
-      description: "ex.parisDesc",
-      build(t) {
-        const lat = 48.8584, lon = 2.2945, ms = Date.UTC(2025, 3, 15, 9, 20);
-        const s = defaultState(t("shot.default", { n: 1 }));
-        s.site.loc = `${lat}, ${lon}`;
-        s.site.radius = "200";
-        s.cons.yearFrom = s.cons.yearTo = "2025";
-        s.cons.zoneKind = "iana";
-        s.cons.zoneValue = "Europe/Paris";
-        const a = lengthsShot(t, 0, ms, lat, lon, 1.2, 0.02, 0.04, 4);
-        a.label = t("ex.bollard");
-        const b = lengthsShot(t, 1, ms, lat, lon, 5.4, 0.1, 0.16, 3);
-        b.label = t("ex.lamp");
-        b.relation = "same";
-        s.shots = [a, b];
-        s.claim.time = "2025:04:15 11:20:00";
-        return s;
-      }
-    },
-    {
-      label: "ex.sydney",
-      description: "ex.sydneyDesc",
-      build(t) {
-        const lat = -33.8568, lon = 151.2153, ms = Date.UTC(2024, 11, 10, 1, 30);
-        const s = defaultState(t("shot.default", { n: 1 }));
-        s.site.loc = `${lat}, ${lon}`;
-        s.cons.yearFrom = s.cons.yearTo = "2024";
-        s.cons.zoneKind = "iana";
-        s.cons.zoneValue = "Australia/Sydney";
-        const a = lengthsShot(t, 0, ms, lat, lon, 1.8, 0.04, 0.06, 4);
-        a.label = t("ex.post1");
-        const b = lengthsShot(t, 1, ms + 81e5, lat, lon, 1.8, 0.04, 0.06, 4);
-        b.label = t("ex.post2");
-        b.relation = "other";
-        b.offset = "+02:15:00";
-        b.offsetTol = "2 s";
-        s.shots = [a, b];
-        return s;
-      }
-    },
-    {
-      label: "ex.tromso",
-      description: "ex.tromsoDesc",
-      build(t) {
-        const lat = 69.6492, lon = 18.9553, ms = Date.UTC(2024, 7, 20, 10, 0);
-        const e = sunAt(ms, lat, lon).elevation;
-        const ratio = Math.tan(e * Math.PI / 180);
-        const s = defaultState(t("shot.default", { n: 1 }));
-        s.site.loc = `${lat}, ${lon}`;
-        s.site.radius = "2";
-        s.site.radiusUnit = "km";
-        s.cons.yearFrom = s.cons.yearTo = "2024";
-        const a = newShot(t("ex.building"));
-        a.label = t("ex.building");
-        a.method = "ratio";
-        a.f.r = r(ratio, 3);
-        a.f.rt = r(ratio * 0.03, 3);
-        a.azOn = false;
-        a.tip = "unknown";
-        s.shots = [a];
-        return s;
-      }
-    },
-    {
-      label: "ex.athens",
-      description: "ex.athensDesc",
-      build(t) {
-        const lat = 37.9715, lon = 23.7257;
-        const times = [Date.UTC(2023, 5, 2, 6, 30), Date.UTC(2023, 5, 2, 9, 45), Date.UTC(2023, 5, 2, 14, 10)];
-        const s = defaultState(t("shot.default", { n: 1 }));
-        s.mode = "place";
-        s.shots = times.map((ms, i) => {
-          const sh = lengthsShot(t, i, ms, lat, lon, 2, 0.02, 0.04, null);
-          sh.label = t("shot.photo", { n: i + 1 });
-          const d = new Date(ms);
-          sh.time = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:00`;
-          sh.timeOffset = "+00:00";
-          sh.timeTol = "30 s";
-          return sh;
-        });
-        return s;
-      }
-    }
-  ];
 
   // src/core/parse.ts
   var NUM = String.raw`-?\d+(?:\.\d+)?`;
@@ -4642,12 +4482,12 @@ dialog li {
   function buildSite(c, s) {
     const ll = parseLocation(s.site.loc);
     if (!ll) c.add("site.loc", s.site.loc.trim() ? "val.locationBad" : "val.locationNeeded");
-    const r2 = c.num("site.radius", s.site.radius, "field.radius", { empty: 0, min: 0 });
+    const r = c.num("site.radius", s.site.radius, "field.radius", { empty: 0, min: 0 });
     return {
       lat: ll?.lat ?? NaN,
       lon: ll?.lon ?? NaN,
       heightM: c.num("site.height", s.site.height, "field.siteHeight", { empty: 0 }),
-      radiusM: s.site.radiusUnit === "km" ? r2 * 1e3 : r2
+      radiusM: s.site.radiusUnit === "km" ? r * 1e3 : r
     };
   }
   function buildZone(c, s) {
@@ -4902,10 +4742,18 @@ dialog li {
         logW
       });
     }
-    const m = Math.max(...regions.map((r2) => r2.logW));
-    const sum = regions.reduce((a, r2) => a + Math.exp(r2.logW - m), 0);
+    const m = Math.max(...regions.map((r) => r.logW));
+    const sum = regions.reduce((a, r) => a + Math.exp(r.logW - m), 0);
     regions.sort((a, b) => b.logW - a.logW);
-    return regions.map(({ logW, ...r2 }, i) => ({ ...r2, id: i, probability: Math.exp(logW - m) / sum }));
+    return regions.map(({ logW, ...r }, i) => ({ ...r, id: i, probability: Math.exp(logW - m) / sum }));
+  }
+
+  // src/core/message.ts
+  function renderMessage(m, tr) {
+    const vars = {};
+    for (const [k, v] of Object.entries(m.vars ?? {})) vars[k] = typeof v === "object" ? renderMessage(v, tr) : v;
+    const text = tr(m.key, vars);
+    return m.shot ? tr("msg.forShadow", { shot: m.shot, text }) : text;
   }
 
   // src/api/messages.ts
@@ -5011,7 +4859,19 @@ dialog li {
     "ex.tromsoDesc": "Tromsø, 20 Aug 2024 10:00 UTC. Only the ratio of a building's height to its shadow is known, with a tolerance.",
     "ex.building": "Building",
     "ex.athens": "Find the place: three photos",
-    "ex.athensDesc": "Athens, 2 Jun 2023 at 06:30, 09:45 and 14:10 UTC. Elevation only — the three rings cross at one place."
+    "ex.athensDesc": "Athens, 2 Jun 2023 at 06:30, 09:45 and 14:10 UTC. Elevation only — the three rings cross at one place.",
+    // ---- Progress phases (sent by the solvers while they run)
+    "progress.scanning": "Scanning {year}",
+    "progress.refining": "Refining {year}",
+    "progress.heatmap": "Drawing the year map",
+    "progress.map": "Refining the map",
+    "progress.regions": "Grouping areas",
+    // ---- Claimed-time verdict levels
+    "claim.consistent": "Consistent with the shadows",
+    "claim.inconsistent": "Not consistent with the shadows",
+    "claim.outside": "outside the 99.7 % region",
+    "claim.insideBounds": "inside all bounds",
+    "claim.insideLevel": "inside the {pct} % region"
   };
   function translate(key, vars = {}) {
     const text = MESSAGES[key];
@@ -5019,10 +4879,7 @@ dialog li {
     return text.replace(/\{(\w+)\}/g, (all, name) => name in vars ? String(vars[name]) : all);
   }
   function formatMessage(m) {
-    const vars = {};
-    for (const [k, v] of Object.entries(m.vars ?? {})) vars[k] = typeof v === "object" ? formatMessage(v) : v;
-    const text = translate(m.key, vars);
-    return m.shot ? translate("msg.forShadow", { shot: m.shot, text }) : text;
+    return renderMessage(m, translate);
   }
 
   // src/api/operations.ts
@@ -5035,36 +4892,35 @@ dialog li {
   function findTime(state, progress) {
     const req = built(buildTimeRequest(state));
     if (!req.ok) return req;
-    const r2 = solveTime(req.value, progress);
-    return r2.ok ? { ok: true, value: { request: req.value, result: r2.result } } : invalid([r2.error]);
+    const r = solveTime(req.value, progress);
+    return r.ok ? { ok: true, value: { request: req.value, result: r.result } } : invalid([r.error]);
   }
   function findPlace(state, progress) {
     const req = built(buildPlaceRequest(state));
     if (!req.ok) return req;
-    const r2 = solveLocation(req.value, progress);
-    return r2.ok ? { ok: true, value: { request: req.value, result: r2.result } } : invalid([r2.error]);
+    const r = solveLocation(req.value, progress);
+    return r.ok ? { ok: true, value: { request: req.value, result: r.result } } : invalid([r.error]);
   }
-  var EXAMPLE_NAMES = EXAMPLES.map((e) => e.label.replace(/^ex\./, ""));
 
   // src/workers/solver.ts
   var post = (m, transfer = []) => self.postMessage(m, transfer);
-  function failure(id, r2) {
-    if (r2.fields) post({ id, type: "invalid", errors: r2.fields });
-    else post({ id, type: "error", error: r2.messages?.[0] ?? { key: "core.err.internal", vars: { detail: r2.message } } });
+  function failure(id, r) {
+    if (r.fields) post({ id, type: "invalid", errors: r.fields });
+    else post({ id, type: "error", error: r.messages?.[0] ?? { key: "core.err.internal", vars: { detail: r.message } } });
   }
   self.onmessage = (ev) => {
     const { id, kind, state } = ev.data;
     const progress = (fraction, phase) => post({ id, type: "progress", fraction, phase });
     try {
       if (kind === "time") {
-        const r2 = findTime(state, progress);
-        if (!r2.ok) return failure(id, r2);
-        const { request, result } = r2.value;
+        const r = findTime(state, progress);
+        if (!r.ok) return failure(id, r);
+        const { request, result } = r.value;
         post({ id, type: "time", req: request, result }, result.heatmap ? [result.heatmap.values.buffer] : []);
       } else {
-        const r2 = findPlace(state, progress);
-        if (!r2.ok) return failure(id, r2);
-        post({ id, type: "place", req: r2.value.request, result: r2.value.result });
+        const r = findPlace(state, progress);
+        if (!r.ok) return failure(id, r);
+        post({ id, type: "place", req: r.value.request, result: r.value.result });
       }
     } catch (e) {
       post({ id, type: "error", error: { key: "core.err.internal", vars: { detail: e instanceof Error ? e.message : String(e) } } });
@@ -5089,7 +4945,7 @@ window.__SWP_SITE__ = {
   },
   "options": {},
   "mode": "single",
-  "version": "923efecc21ca",
+  "version": "3762a808e038",
   "date": "2026-11-10",
   "assets": [],
   "distribution": "single",
@@ -15690,154 +15546,18 @@ window.__SWP_SITE__ = {
     return out;
   }
 
-  // src/state/case.ts
-  var CaseStore = class {
-    state;
-    listeners = [];
-    constructor(state) {
-      this.state = state;
-    }
-    subscribe(l) {
-      this.listeners.push(l);
-    }
-    /** Mutate in place; structural = the set/shape of controls changed. */
-    update(fn, structural = false) {
-      fn(this.state);
-      for (const l of this.listeners) l(this.state, structural);
-    }
-    replace(s) {
-      this.state = s;
-      for (const l of this.listeners) l(this.state, true);
-    }
-  };
-  var CASE_KEY = "case";
-  function loadCase(platform3, shotLabel2) {
-    const raw = platform3.sessionStore.get(CASE_KEY);
-    if (!raw) return null;
-    try {
-      return parseCase(JSON.parse(raw), shotLabel2);
-    } catch {
-      return null;
-    }
+  // src/core/message.ts
+  function renderMessage(m, tr) {
+    const vars = {};
+    for (const [k, v] of Object.entries(m.vars ?? {})) vars[k] = typeof v === "object" ? renderMessage(v, tr) : v;
+    const text = tr(m.key, vars);
+    return m.shot ? tr("msg.forShadow", { shot: m.shot, text }) : text;
   }
-  var saveTimer = 0;
-  function saveCaseSoon(platform3, s) {
-    clearTimeout(saveTimer);
-    saveTimer = window.setTimeout(() => platform3.sessionStore.set(CASE_KEY, JSON.stringify(s)), 400);
+  function claimLevel(acceptedLevel2) {
+    if (acceptedLevel2 === null) return { key: "claim.outside" };
+    if (acceptedLevel2 === 1) return { key: "claim.insideBounds" };
+    return { key: "claim.insideLevel", vars: { pct: (acceptedLevel2 * 100).toFixed(acceptedLevel2 > 0.99 ? 1 : 0) } };
   }
-  function untouched(s) {
-    return !s.site.loc.trim() && s.shots.every((x) => !Object.values(x.f).some((v) => v.trim()) && !x.time.trim() && !x.az.trim());
-  }
-
-  // src/state/solve.ts
-  var JobRunner = class {
-    createWorker;
-    worker = null;
-    busy = false;
-    id = 0;
-    /** `createWorker` is `() => platform.worker("solver")`. */
-    constructor(createWorker) {
-      this.createWorker = createWorker;
-    }
-    run(job, handlers) {
-      if (this.worker && this.busy) {
-        this.worker.terminate();
-        this.worker = null;
-      }
-      this.worker ??= this.createWorker();
-      const id = ++this.id;
-      this.busy = true;
-      this.worker.onmessage = (ev) => {
-        const m = ev.data;
-        if (m.id !== id) return;
-        if (m.type === "progress") return handlers.progress(m.fraction, m.phase);
-        this.busy = false;
-        if (m.type === "error") handlers.error(m.error);
-        else if (m.type === "invalid") handlers.invalid(m.errors);
-        else handlers.done(m);
-      };
-      this.worker.onerror = (e) => {
-        this.busy = false;
-        handlers.error({ key: "core.err.worker", vars: { detail: e.message } });
-      };
-      this.worker.postMessage({ id, ...job });
-    }
-  };
-  var SolveSession = class {
-    status = { kind: "invalid", errors: [] };
-    /** Field keys currently invalid (inline marks). */
-    invalid = /* @__PURE__ */ new Set();
-    /** The latest finished result, kept while a newer job runs (shown as stale). */
-    solved = null;
-    cases;
-    jobs;
-    listeners = [];
-    timer = 0;
-    constructor(cases2, jobs) {
-      this.cases = cases2;
-      this.jobs = jobs;
-    }
-    subscribe(l) {
-      this.listeners.push(l);
-    }
-    publish(s) {
-      this.status = s;
-      for (const l of this.listeners) l(s);
-    }
-    schedule() {
-      clearTimeout(this.timer);
-      this.timer = window.setTimeout(() => this.solve(), 350);
-    }
-    solve() {
-      clearTimeout(this.timer);
-      const s = this.cases.state;
-      this.jobs.run({ kind: s.mode, state: s }, {
-        progress: (fraction, phase) => this.publish({ kind: "running", fraction, phase }),
-        done: (m) => {
-          this.invalid = /* @__PURE__ */ new Set();
-          this.solved = m.type === "time" ? { mode: "time", req: m.req, res: m.result } : { mode: "place", req: m.req, res: m.result };
-          this.publish({ kind: "done", solved: this.solved });
-        },
-        invalid: (errors) => {
-          this.invalid = new Set(errors.map((e) => e.key));
-          this.solved = null;
-          this.publish({ kind: "invalid", errors });
-        },
-        error: (error) => {
-          this.invalid = /* @__PURE__ */ new Set();
-          this.solved = null;
-          this.publish({ kind: "error", error });
-        }
-      });
-    }
-  };
-
-  // src/state/view.ts
-  var VIEW_KEY = "view";
-  var ViewState = class {
-    expert;
-    started;
-    platform;
-    listeners = [];
-    constructor(platform3, started2) {
-      this.platform = platform3;
-      this.expert = platform3.store.get(VIEW_KEY) === "expert";
-      this.started = started2;
-    }
-    subscribe(l) {
-      this.listeners.push(l);
-    }
-    setExpert(on) {
-      this.expert = on;
-      this.platform.store.set(VIEW_KEY, on ? "expert" : "guided");
-      for (const l of this.listeners) l();
-    }
-    /** Leaves (true) or returns to (false) the guided start screen. */
-    setStarted(on) {
-      this.started = on;
-      for (const l of this.listeners) l();
-    }
-  };
 
   // src/api/messages.ts
   var MESSAGES = {
@@ -15942,7 +15662,19 @@ window.__SWP_SITE__ = {
     "ex.tromsoDesc": "Tromsø, 20 Aug 2024 10:00 UTC. Only the ratio of a building's height to its shadow is known, with a tolerance.",
     "ex.building": "Building",
     "ex.athens": "Find the place: three photos",
-    "ex.athensDesc": "Athens, 2 Jun 2023 at 06:30, 09:45 and 14:10 UTC. Elevation only — the three rings cross at one place."
+    "ex.athensDesc": "Athens, 2 Jun 2023 at 06:30, 09:45 and 14:10 UTC. Elevation only — the three rings cross at one place.",
+    // ---- Progress phases (sent by the solvers while they run)
+    "progress.scanning": "Scanning {year}",
+    "progress.refining": "Refining {year}",
+    "progress.heatmap": "Drawing the year map",
+    "progress.map": "Refining the map",
+    "progress.regions": "Grouping areas",
+    // ---- Claimed-time verdict levels
+    "claim.consistent": "Consistent with the shadows",
+    "claim.inconsistent": "Not consistent with the shadows",
+    "claim.outside": "outside the 99.7 % region",
+    "claim.insideBounds": "inside all bounds",
+    "claim.insideLevel": "inside the {pct} % region"
   };
   function translate(key, vars = {}) {
     const text = MESSAGES[key];
@@ -15950,11 +15682,563 @@ window.__SWP_SITE__ = {
     return text.replace(/\{(\w+)\}/g, (all, name) => name in vars ? String(vars[name]) : all);
   }
   function formatMessage(m) {
-    const vars = {};
-    for (const [k, v] of Object.entries(m.vars ?? {})) vars[k] = typeof v === "object" ? formatMessage(v) : v;
-    const text = translate(m.key, vars);
-    return m.shot ? translate("msg.forShadow", { shot: m.shot, text }) : text;
+    return renderMessage(m, translate);
   }
+
+  // src/api/case.ts
+  var shotLabel = (n) => translate("shot.default", { n });
+
+  // src/state/case.ts
+  var CaseStore = class {
+    state;
+    listeners = [];
+    constructor(state) {
+      this.state = state;
+    }
+    subscribe(l) {
+      this.listeners.push(l);
+    }
+    /** Mutate in place; structural = the set/shape of controls changed. */
+    update(fn, structural = false) {
+      fn(this.state);
+      for (const l of this.listeners) l(this.state, structural);
+    }
+    replace(s) {
+      this.state = s;
+      for (const l of this.listeners) l(this.state, true);
+    }
+  };
+  var CASE_KEY = "case";
+  function loadCase(platform3, shotLabel2) {
+    const raw = platform3.sessionStore.get(CASE_KEY);
+    if (!raw) return null;
+    try {
+      return parseCase(JSON.parse(raw), shotLabel2);
+    } catch {
+      return null;
+    }
+  }
+  var saveTimer = 0;
+  function saveCaseSoon(platform3, s) {
+    clearTimeout(saveTimer);
+    saveTimer = window.setTimeout(() => platform3.sessionStore.set(CASE_KEY, JSON.stringify(s)), 400);
+  }
+  function untouched(s) {
+    return !s.site.loc.trim() && s.shots.every((x) => !Object.values(x.f).some((v) => v.trim()) && !x.time.trim() && !x.az.trim());
+  }
+
+  // src/core/parse.ts
+  var NUM = String.raw`-?\d+(?:\.\d+)?`;
+  function valid(lat, lon) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+    return { lat, lon };
+  }
+  function fromUrl(t2) {
+    const pairs = [
+      new RegExp(String.raw`!3d(${NUM})!4d(${NUM})`),
+      // Google place pin
+      new RegExp(String.raw`[?&](?:q|query|ll|sll|daddr|center)=(${NUM})(?:,|%2C)\s*(${NUM})`),
+      new RegExp(String.raw`@(${NUM}),(${NUM})`)
+      // Google viewport
+    ];
+    for (const re of pairs) {
+      const m = t2.match(re);
+      if (m) return valid(Number(m[1]), Number(m[2]));
+    }
+    const osm = t2.match(new RegExp(String.raw`mlat=(${NUM}).*?mlon=(${NUM})`));
+    if (osm) return valid(Number(osm[1]), Number(osm[2]));
+    const map2 = t2.match(new RegExp(String.raw`#map=\d+(?:\.\d+)?/(${NUM})/(${NUM})`));
+    if (map2) return valid(Number(map2[1]), Number(map2[2]));
+    return null;
+  }
+  function part(s) {
+    const hemi = (s.match(/[NSEW]/i)?.[0] ?? null)?.toUpperCase() ?? null;
+    const nums = s.match(/-?\d+(?:\.\d+)?/g);
+    if (!nums || nums.length > 3) return null;
+    const [d, m = "0", sec = "0"] = nums;
+    const deg = Number(d);
+    if (Number(m) >= 60 || Number(sec) >= 60) return null;
+    let v = Math.abs(deg) + Number(m) / 60 + Number(sec) / 3600;
+    if (deg < 0 || d.startsWith("-") || hemi === "S" || hemi === "W") v = -v;
+    return { value: v, hemi };
+  }
+  function parseLocation(input) {
+    const raw = input.trim();
+    if (!raw) return null;
+    if (/https?:|www\.|maps|@|#map=|mlat=/i.test(raw)) {
+      const u = fromUrl(decodeURIComponent(raw));
+      if (u) return u;
+    }
+    let t2 = raw.replace(/[′’´`]/g, "'").replace(/[″”“]|''/g, '"').replace(/[º˚]/g, "°");
+    if (t2.includes(";")) t2 = t2.replace(/(\d),(\d)/g, "$1.$2");
+    const letters = [...t2.matchAll(/[NSEW]/gi)];
+    const [l1, l2] = letters;
+    if (letters.length === 2 && l1 && l2) {
+      const i1 = l1.index;
+      const i2 = l2.index;
+      const suffix = /\d/.test(t2.slice(0, i1));
+      const a = suffix ? t2.slice(0, i1 + 1) : t2.slice(0, i2);
+      const b = suffix ? t2.slice(i1 + 1) : t2.slice(i2);
+      const pa = part(a);
+      const pb = part(b.replace(/^[\s,;]+/, ""));
+      if (!pa || !pb) return null;
+      if (pa.hemi === "E" || pa.hemi === "W") return valid(pb.value, pa.value);
+      return valid(pa.value, pb.value);
+    }
+    if (letters.length !== 0) return null;
+    const halves = t2.includes(",") || t2.includes(";") ? t2.split(/[,;]/) : null;
+    const [h1, h2] = halves ?? [];
+    if (halves && halves.length === 2 && h1 !== void 0 && h2 !== void 0) {
+      const pa = part(h1);
+      const pb = part(h2);
+      return pa && pb ? valid(pa.value, pb.value) : null;
+    }
+    const nums = t2.match(/-?\d+(?:\.\d+)?/g) ?? [];
+    if (nums.length === 2 || nums.length === 4 || nums.length === 6) {
+      const h3 = nums.length / 2;
+      const pa = part(nums.slice(0, h3).join(" "));
+      const pb = part(nums.slice(h3).join(" "));
+      return pa && pb ? valid(pa.value, pb.value) : null;
+    }
+    return null;
+  }
+  function parseDateTime(input) {
+    const m = input.trim().match(
+      /^(\d{4})[-:/.](\d{1,2})[-:/.](\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?\s*(Z|UTC|GMT|[+-]\d{2}(?::?\d{2})?)?$/i
+    );
+    if (!m) return null;
+    const [, y, mo, d, h2 = "0", mi = "0", s = "0", frac = "", off] = m;
+    const month = Number(mo);
+    const day = Number(d);
+    if (month < 1 || month > 12 || day < 1 || day > 31 || Number(h2) > 23 || Number(mi) > 59 || Number(s) > 59) {
+      return null;
+    }
+    const ms = frac ? Math.round(Number(`0.${frac}`) * 1e3) : 0;
+    const wallMs = Date.UTC(Number(y), month - 1, day, Number(h2), Number(mi), Number(s), ms);
+    if (new Date(wallMs).getUTCDate() !== day) return null;
+    return { wallMs, offsetMin: off ? parseOffset(off) : null };
+  }
+  function parseOffset(input) {
+    const t2 = input.trim().toUpperCase().replace(/^(UTC|GMT)/, "").trim();
+    if (t2 === "" || t2 === "Z") return 0;
+    let m = t2.match(/^([+-−])(\d{1,2})(?::?(\d{2}))?$/);
+    if (m) {
+      const v = Number(m[2]) * 60 + Number(m[3] ?? 0);
+      return v > 14 * 60 ? null : m[1] === "+" ? v : -v;
+    }
+    m = t2.match(/^([+-−]?)(\d{1,2}(?:\.\d+)?)$/);
+    if (m) {
+      const v = Math.round(Number(m[2]) * 60);
+      return v > 14 * 60 ? null : m[1] === "-" || m[1] === "−" ? -v : v;
+    }
+    return null;
+  }
+  function parseDuration(input) {
+    const t2 = input.trim().toLowerCase().replace("−", "-");
+    if (!t2) return null;
+    let m = t2.match(/^([+-]?)(\d+):(\d{1,2})(?::(\d{1,2}(?:\.\d+)?))?$/);
+    if (m) {
+      const v = Number(m[2]) * 3600 + Number(m[3]) * 60 + Number(m[4] ?? 0);
+      return m[1] === "-" ? -v : v;
+    }
+    m = t2.match(/^[+-]?\d+(?:\.\d+)?$/);
+    if (m) return Number(t2);
+    const sign = t2.startsWith("-") ? -1 : 1;
+    const body = t2.replace(/^[+-]/, "");
+    const re = /(\d+(?:\.\d+)?)\s*(d|days?|h|hours?|hrs?|m|mins?|minutes?|s|secs?|seconds?)\b/g;
+    let total = 0;
+    let consumed = "";
+    for (const x of body.matchAll(re)) {
+      const v = Number(x[1]);
+      const u = (x[2] ?? "")[0];
+      total += u === "d" ? v * 86400 : u === "h" ? v * 3600 : u === "m" ? v * 60 : v;
+      consumed += x[0];
+    }
+    if (!consumed || body.replace(/\s+/g, "").length !== consumed.replace(/\s+/g, "").length) return null;
+    return sign * total;
+  }
+
+  // src/core/zone.ts
+  var formatters = /* @__PURE__ */ new Map();
+  var offsetCache = /* @__PURE__ */ new Map();
+  function ianaOffsetMin(name, ms) {
+    const hour = Math.floor(ms / 36e5);
+    const key = `${name}|${hour}`;
+    const hit = offsetCache.get(key);
+    if (hit !== void 0) return hit;
+    let f = formatters.get(name);
+    if (!f) {
+      f = new Intl.DateTimeFormat("en-GB", {
+        timeZone: name,
+        hourCycle: "h23",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+      formatters.set(name, f);
+    }
+    const p = {};
+    for (const part2 of f.formatToParts(ms)) {
+      if (part2.type !== "literal") p[part2.type] = Number(part2.value);
+    }
+    const asUtc = Date.UTC(p.year ?? NaN, (p.month ?? NaN) - 1, p.day ?? NaN, p.hour ?? NaN, p.minute ?? NaN, p.second ?? NaN);
+    const off = Math.round((asUtc - Math.floor(ms / 1e3) * 1e3) / 6e4);
+    if (offsetCache.size > 4e5) offsetCache.clear();
+    offsetCache.set(key, off);
+    return off;
+  }
+  function isValidIana(name) {
+    try {
+      new Intl.DateTimeFormat("en-GB", { timeZone: name });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  function zoneOffsetMin(zone, ms, lon) {
+    switch (zone.kind) {
+      case "utc":
+        return 0;
+      case "offset":
+        return zone.minutes;
+      case "solar":
+        return lon * 4;
+      case "iana":
+        return ianaOffsetMin(zone.name, ms);
+    }
+  }
+  function wallToUtc(zone, wallMs, lon) {
+    let utc = wallMs - zoneOffsetMin(zone, wallMs, lon) * 6e4;
+    utc = wallMs - zoneOffsetMin(zone, utc, lon) * 6e4;
+    return utc;
+  }
+  function formatOffset(min) {
+    const sign = min < 0 ? "−" : "+";
+    const a = Math.abs(Math.round(min));
+    return `${sign}${String(Math.floor(a / 60)).padStart(2, "0")}:${String(a % 60).padStart(2, "0")}`;
+  }
+
+  // src/core/request.ts
+  function parseNumber(s) {
+    const t2 = s.trim().replace(",", ".").replace("−", "-");
+    return t2 === "" ? NaN : Number(t2);
+  }
+  var Collector = class {
+    errors = [];
+    /** `what` is the string-table key of the field's name. */
+    num(key, s, what, opts = {}) {
+      const v = s.trim() === "" && opts.empty !== void 0 ? opts.empty : parseNumber(s);
+      if (!Number.isFinite(v)) this.errors.push({ key, msg: { key: "val.number", vars: { what: { key: what } } } });
+      else if (opts.min !== void 0 && v < opts.min) this.errors.push({ key, msg: { key: "val.min", vars: { what: { key: what }, min: opts.min } } });
+      return v;
+    }
+    add(key, msgKey, vars) {
+      this.errors.push({ key, msg: { key: msgKey, vars } });
+    }
+  };
+  function tolerance(c, key, text, what) {
+    if (!text.trim()) {
+      c.add(key, "val.tolerance", { what: { key: what } });
+      return NaN;
+    }
+    return c.num(key, text, what, { min: 0 });
+  }
+  function bounded(c, sh, base, what, positive) {
+    const v = c.num(`${sh.id}.${base}`, sh.f[base] ?? "", what);
+    const t2 = tolerance(c, `${sh.id}.${base}t`, sh.f[`${base}t`] ?? "", what);
+    if (positive && Number.isFinite(v) && Number.isFinite(t2) && v - t2 <= 0) {
+      c.add(`${sh.id}.${base}t`, "val.toleranceTooBig", { what: { key: what } });
+    }
+    return { kind: "range", min: v - t2, max: v + t2 };
+  }
+  function buildShadow(c, sh) {
+    const elevation = sh.method === "lengths" ? { method: "lengths", height: bounded(c, sh, "h", "field.height", true), shadow: bounded(c, sh, "l", "field.shadow", true) } : sh.method === "ratio" ? { method: "ratio", ratio: bounded(c, sh, "r", "field.ratio", true) } : { method: "angle", angle: bounded(c, sh, "a", "field.elevation", true) };
+    let azimuth = null;
+    if (sh.azOn && sh.az.trim()) {
+      const v = c.num(`${sh.id}.az`, sh.az, "field.direction");
+      const t2 = tolerance(c, `${sh.id}.azt`, sh.azt, "field.direction");
+      azimuth = {
+        shadow: { kind: "range", min: v - t2, max: v + t2 },
+        reference: sh.azRef,
+        declinationDeg: sh.azRef === "magnetic" ? c.num(`${sh.id}.decl`, sh.decl, "field.declination", { empty: 0 }) : 0
+      };
+    }
+    return {
+      elevation,
+      tipEdge: sh.tip,
+      maxTiltDeg: c.num(`${sh.id}.tilt`, sh.tilt, "field.lean", { empty: 0, min: 0 }),
+      azimuth
+    };
+  }
+  function atmosphere(c, s) {
+    return {
+      pressureHpa: c.num("adv.pressure", s.adv.pressure, "field.pressure", { empty: 1010, min: 1 }),
+      temperatureC: c.num("adv.temp", s.adv.temp, "field.temperature", { empty: 10 }),
+      refraction: s.adv.refraction
+    };
+  }
+  function deltaT(c, s) {
+    return s.adv.deltaT.trim() === "" ? null : c.num("adv.deltaT", s.adv.deltaT, "field.deltaT");
+  }
+  function buildSite(c, s) {
+    const ll = parseLocation(s.site.loc);
+    if (!ll) c.add("site.loc", s.site.loc.trim() ? "val.locationBad" : "val.locationNeeded");
+    const r2 = c.num("site.radius", s.site.radius, "field.radius", { empty: 0, min: 0 });
+    return {
+      lat: ll?.lat ?? NaN,
+      lon: ll?.lon ?? NaN,
+      heightM: c.num("site.height", s.site.height, "field.siteHeight", { empty: 0 }),
+      radiusM: s.site.radiusUnit === "km" ? r2 * 1e3 : r2
+    };
+  }
+  function buildZone(c, s) {
+    const { zoneKind, zoneValue } = s.cons;
+    if (zoneKind === "offset") {
+      const m = parseOffset(zoneValue);
+      if (m === null) c.add("cons.zone", "val.offsetBad");
+      return { kind: "offset", minutes: m ?? 0 };
+    }
+    if (zoneKind === "iana") {
+      if (!isValidIana(zoneValue.trim())) c.add("cons.zone", "val.zoneBad");
+      return { kind: "iana", name: zoneValue.trim() || "UTC" };
+    }
+    return { kind: zoneKind };
+  }
+  function tod(c, key, s) {
+    if (!s.trim()) return null;
+    const m = s.trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) {
+      c.add(key, "val.hhmm");
+      return null;
+    }
+    return Number(m[1]) * 60 + Number(m[2]);
+  }
+  function bound(c, key, s, zone, lon) {
+    if (!s.trim()) return null;
+    const p = parseDateTime(s);
+    if (!p) {
+      c.add(key, "val.dateBad");
+      return null;
+    }
+    return p.offsetMin !== null ? p.wallMs - p.offsetMin * 6e4 : wallToUtc(zone, p.wallMs, Number.isFinite(lon) ? lon : 0);
+  }
+  function timeShots(c, s) {
+    return s.shots.map((sh, i) => {
+      const shadow = buildShadow(c, sh);
+      let offsetS = 0;
+      let sigma = 0;
+      if (i > 0 && sh.relation === "other") {
+        const o = parseDuration(sh.offset);
+        if (o === null) c.add(`${sh.id}.offset`, "val.gap");
+        offsetS = o ?? 0;
+        const sg = sh.offsetTol.trim() ? parseDuration(sh.offsetTol) : null;
+        if (sg === null || sg < 0) c.add(`${sh.id}.offsetTol`, "val.gapTolerance");
+        sigma = Math.abs(sg ?? 0);
+      }
+      return { id: sh.id, label: sh.label, shadow, offsetS, timeMs: NaN, timeSigmaS: sigma };
+    });
+  }
+  function buildTimeRequest(s) {
+    const c = new Collector();
+    const site = buildSite(c, s);
+    const zone = buildZone(c, s);
+    const constraints = {
+      yearFrom: c.num("cons.yearFrom", s.cons.yearFrom, "field.yearFrom"),
+      yearTo: c.num("cons.yearTo", s.cons.yearTo || s.cons.yearFrom, "field.yearTo"),
+      months: s.cons.months,
+      todFromMin: tod(c, "cons.todFrom", s.cons.todFrom),
+      todToMin: tod(c, "cons.todTo", s.cons.todTo),
+      notBeforeMs: bound(c, "cons.notBefore", s.cons.notBefore, zone, site.lon),
+      notAfterMs: bound(c, "cons.notAfter", s.cons.notAfter, zone, site.lon),
+      zone
+    };
+    if (constraints.todFromMin === null !== (constraints.todToMin === null)) {
+      c.add(constraints.todFromMin === null ? "cons.todFrom" : "cons.todTo", "val.todBoth");
+    }
+    const req = {
+      shots: timeShots(c, s),
+      site,
+      atmosphere: atmosphere(c, s),
+      constraints,
+      deltaTOverride: deltaT(c, s)
+    };
+    return c.errors.length ? { ok: false, errors: c.errors } : { ok: true, req };
+  }
+  function buildPlaceRequest(s) {
+    const c = new Collector();
+    const shots = s.shots.map((sh) => {
+      const shadow = buildShadow(c, sh);
+      const p = parseDateTime(sh.time);
+      let timeMs = NaN;
+      if (!p) c.add(`${sh.id}.time`, sh.time.trim() ? "val.dateTimeBad" : "val.whenTaken");
+      else {
+        const off = p.offsetMin ?? parseOffset(sh.timeOffset);
+        if (off === null) c.add(`${sh.id}.timeOffset`, "val.offsetBad");
+        timeMs = p.wallMs - (off ?? 0) * 6e4;
+      }
+      const sg = sh.timeTol.trim() ? parseDuration(sh.timeTol) : null;
+      if (sg === null || sg < 0) c.add(`${sh.id}.timeTol`, "val.timeTolerance");
+      return { id: sh.id, label: sh.label, shadow, offsetS: 0, timeMs, timeSigmaS: Math.abs(sg ?? 0) };
+    });
+    let bounds = null;
+    if (s.search.kind === "bbox") {
+      const [south = NaN, west = NaN, north = NaN, east = NaN, ...extra] = s.search.bbox.split(/[,;\s]+/).filter(Boolean).map(parseNumber);
+      if (extra.length || ![south, west, north, east].every(Number.isFinite) || south >= north || west >= east) {
+        c.add("search.bbox", "val.bbox");
+      } else bounds = [south, west, north, east];
+    }
+    const req = {
+      shots,
+      atmosphere: atmosphere(c, s),
+      bounds,
+      heightM: 0,
+      deltaTOverride: deltaT(c, s)
+    };
+    return c.errors.length ? { ok: false, errors: c.errors } : { ok: true, req };
+  }
+  function buildClaimRequest(s) {
+    const c = new Collector();
+    const site = buildSite(c, s);
+    const p = parseDateTime(s.claim.time);
+    if (!p) c.add("claim.time", s.claim.time.trim() ? "val.dateTimeBad" : "val.claimNeeded");
+    let offsetMin = p?.offsetMin ?? null;
+    if (offsetMin === null && s.claim.offset.trim()) {
+      offsetMin = parseOffset(s.claim.offset);
+      if (offsetMin === null) c.add("claim.offset", "val.offsetBad");
+    }
+    const req = {
+      shots: timeShots(c, s),
+      site,
+      atmosphere: atmosphere(c, s),
+      deltaTOverride: deltaT(c, s),
+      wallClockMs: p?.wallMs ?? NaN,
+      offsetMin
+    };
+    return c.errors.length ? { ok: false, errors: c.errors } : { ok: true, req };
+  }
+  function buildShadowOnly(sh) {
+    const c = new Collector();
+    const shadow = buildShadow(c, sh);
+    return c.errors.length ? null : shadow;
+  }
+
+  // src/state/solve.ts
+  var JobRunner = class {
+    createWorker;
+    worker = null;
+    busy = false;
+    id = 0;
+    /** `createWorker` is `() => platform.worker("solver")`. */
+    constructor(createWorker) {
+      this.createWorker = createWorker;
+    }
+    run(job, handlers) {
+      if (this.worker && this.busy) {
+        this.worker.terminate();
+        this.worker = null;
+      }
+      this.worker ??= this.createWorker();
+      const id = ++this.id;
+      this.busy = true;
+      this.worker.onmessage = (ev) => {
+        const m = ev.data;
+        if (m.id !== id) return;
+        if (m.type === "progress") return handlers.progress(m.fraction, m.phase);
+        this.busy = false;
+        if (m.type === "error") handlers.error(m.error);
+        else if (m.type === "invalid") handlers.invalid(m.errors);
+        else handlers.done(m);
+      };
+      this.worker.onerror = (e) => {
+        this.busy = false;
+        handlers.error({ key: "core.err.worker", vars: { detail: e.message } });
+      };
+      this.worker.postMessage({ id, ...job });
+    }
+  };
+  var SolveSession = class {
+    status = { kind: "invalid", errors: [] };
+    /** Field keys currently invalid (inline marks). */
+    invalid = /* @__PURE__ */ new Set();
+    /** The latest finished result, kept while a newer job runs (shown as stale). */
+    solved = null;
+    cases;
+    jobs;
+    listeners = [];
+    timer = 0;
+    constructor(cases2, jobs) {
+      this.cases = cases2;
+      this.jobs = jobs;
+    }
+    subscribe(l) {
+      this.listeners.push(l);
+    }
+    publish(s) {
+      this.status = s;
+      for (const l of this.listeners) l(s);
+    }
+    schedule() {
+      clearTimeout(this.timer);
+      this.timer = window.setTimeout(() => this.solve(), 350);
+    }
+    solve() {
+      clearTimeout(this.timer);
+      const s = this.cases.state;
+      const built2 = s.mode === "time" ? buildTimeRequest(s) : buildPlaceRequest(s);
+      if (!built2.ok) return this.rejected(built2.errors);
+      this.publish({ kind: "running", fraction: 0, phase: null });
+      this.jobs.run({ kind: s.mode, state: s }, {
+        progress: (fraction, phase) => this.publish({ kind: "running", fraction, phase }),
+        done: (m) => {
+          this.invalid = /* @__PURE__ */ new Set();
+          this.solved = m.type === "time" ? { mode: "time", req: m.req, res: m.result } : { mode: "place", req: m.req, res: m.result };
+          this.publish({ kind: "done", solved: this.solved });
+        },
+        invalid: (errors) => this.rejected(errors),
+        error: (error) => {
+          this.invalid = /* @__PURE__ */ new Set();
+          this.solved = null;
+          this.publish({ kind: "error", error });
+        }
+      });
+    }
+    rejected(errors) {
+      this.invalid = new Set(errors.map((e) => e.key));
+      this.solved = null;
+      this.publish({ kind: "invalid", errors });
+    }
+  };
+
+  // src/state/view.ts
+  var VIEW_KEY = "view";
+  var ViewState = class {
+    expert;
+    started;
+    platform;
+    listeners = [];
+    constructor(platform3, started2) {
+      this.platform = platform3;
+      this.expert = platform3.store.get(VIEW_KEY) === "expert";
+      this.started = started2;
+    }
+    subscribe(l) {
+      this.listeners.push(l);
+    }
+    setExpert(on) {
+      this.expert = on;
+      this.platform.store.set(VIEW_KEY, on ? "expert" : "guided");
+      for (const l of this.listeners) l();
+    }
+    /** Leaves (true) or returns to (false) the guided start screen. */
+    setStarted(on) {
+      this.started = on;
+      for (const l of this.listeners) l();
+    }
+  };
 
   // src/strings.ts
   var STRINGS = {
@@ -15993,11 +16277,6 @@ window.__SWP_SITE__ = {
       "empty.needed": "Still needed",
       "empty.cannot": "Cannot compute yet",
       "progress.computing": "Computing…",
-      "progress.scanning": "Scanning {year}",
-      "progress.refining": "Refining {year}",
-      "progress.heatmap": "Drawing the year map",
-      "progress.map": "Refining the map",
-      "progress.regions": "Grouping areas",
       "announce.period": "Answer updated: {n} possible period.",
       "announce.periods": "Answer updated: {n} possible periods.",
       "announce.noTime": "Answer updated: no compatible time.",
@@ -16229,11 +16508,6 @@ window.__SWP_SITE__ = {
       "claim.timeInfo": "The time the photo claims: EXIF DateTimeOriginal (2024:07:14 15:32:10), a post date, a witness statement.",
       "claim.offsetPlaceholder": "unknown",
       "claim.offsetInfo": "Leave empty if the offset is unknown (EXIF often has none): every offset from UTC−12 to UTC+14 is tested, and the compatible ones are listed.",
-      "claim.outside": "outside the 99.7 % region",
-      "claim.insideBounds": "inside all bounds",
-      "claim.insideLevel": "inside the {pct} % region",
-      "claim.consistent": "Consistent with the shadows",
-      "claim.inconsistent": "Not consistent with the shadows",
       "claim.levelSentence": "{time} is {level}.",
       "claim.nearest": "Nearest compatible time: {time} — {dist} away.",
       "claim.shotDetail": "{shot}: the Sun would be at {el}° elevation, {az}° azimuth (difference {residual}).",
@@ -16358,10 +16632,7 @@ window.__SWP_SITE__ = {
     return platform().t(key, vars);
   }
   function tm(m) {
-    const vars = {};
-    for (const [k, v] of Object.entries(m.vars ?? {})) vars[k] = typeof v === "object" ? tm(v) : v;
-    const text = t(m.key, vars);
-    return m.shot ? t("msg.forShadow", { shot: m.shot, text }) : text;
+    return renderMessage(m, t);
   }
 
   // src/ui/dom.ts
@@ -17317,7 +17588,7 @@ window.__SWP_SITE__ = {
     const arcmin = 1 / Math.tan((apparentDeg + 7.31 / (apparentDeg + 4.4)) * DEG2);
     return arcmin / 60;
   }
-  function valid(u, positive) {
+  function valid2(u, positive) {
     const nums = u.kind === "gauss" ? [u.value, u.sigma] : [u.min, u.max];
     if (nums.some((n) => !Number.isFinite(n))) return "core.err.missing";
     if (u.kind === "gauss" && u.sigma < 0) return "core.err.negativeSigma";
@@ -17330,7 +17601,7 @@ window.__SWP_SITE__ = {
   function elevationPart(s) {
     const e = s.elevation;
     if (e.method === "lengths") {
-      const err2 = valid(e.height, true) ?? valid(e.shadow, true);
+      const err2 = valid2(e.height, true) ?? valid2(e.shadow, true);
       if (err2) return fieldError("core.field.heightShadow", err2);
       if (e.height.kind !== e.shadow.kind) return { key: "core.err.mixedKinds" };
       if (e.height.kind === "gauss" && e.shadow.kind === "gauss") {
@@ -17356,7 +17627,7 @@ window.__SWP_SITE__ = {
       return { key: "core.err.mixedKinds" };
     }
     if (e.method === "ratio") {
-      const err2 = valid(e.ratio, true);
+      const err2 = valid2(e.ratio, true);
       if (err2) return fieldError("core.field.ratio", err2);
       if (e.ratio.kind === "gauss") {
         const r2 = e.ratio.value;
@@ -17374,7 +17645,7 @@ window.__SWP_SITE__ = {
         items: [{ label: "budget.ratio", amount: (hi - lo) / 2 }]
       };
     }
-    const err = valid(e.angle, true);
+    const err = valid2(e.angle, true);
     if (err) return fieldError("core.field.elevation", err);
     if (e.angle.kind === "gauss") {
       return {
@@ -17429,7 +17700,7 @@ window.__SWP_SITE__ = {
     const azItems = [];
     if (s.azimuth) {
       const a = s.azimuth;
-      const err = valid(a.shadow, false);
+      const err = valid2(a.shadow, false);
       if (err) return { ok: false, error: fieldError("core.field.azimuth", err) };
       if (!Number.isFinite(a.declinationDeg)) return { ok: false, error: { key: "core.err.declination" } };
       const decl = a.reference === "magnetic" ? a.declinationDeg : 0;
@@ -17450,61 +17721,6 @@ window.__SWP_SITE__ = {
       ok: true,
       obs: { elevation, azimuth, elevationBudget: items, azimuthBudget: azItems, warnings }
     };
-  }
-
-  // src/core/zone.ts
-  var formatters = /* @__PURE__ */ new Map();
-  var offsetCache = /* @__PURE__ */ new Map();
-  function ianaOffsetMin(name, ms) {
-    const hour = Math.floor(ms / 36e5);
-    const key = `${name}|${hour}`;
-    const hit = offsetCache.get(key);
-    if (hit !== void 0) return hit;
-    let f = formatters.get(name);
-    if (!f) {
-      f = new Intl.DateTimeFormat("en-GB", {
-        timeZone: name,
-        hourCycle: "h23",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit"
-      });
-      formatters.set(name, f);
-    }
-    const p = {};
-    for (const part2 of f.formatToParts(ms)) {
-      if (part2.type !== "literal") p[part2.type] = Number(part2.value);
-    }
-    const asUtc = Date.UTC(p.year ?? NaN, (p.month ?? NaN) - 1, p.day ?? NaN, p.hour ?? NaN, p.minute ?? NaN, p.second ?? NaN);
-    const off = Math.round((asUtc - Math.floor(ms / 1e3) * 1e3) / 6e4);
-    if (offsetCache.size > 4e5) offsetCache.clear();
-    offsetCache.set(key, off);
-    return off;
-  }
-  function zoneOffsetMin(zone, ms, lon) {
-    switch (zone.kind) {
-      case "utc":
-        return 0;
-      case "offset":
-        return zone.minutes;
-      case "solar":
-        return lon * 4;
-      case "iana":
-        return ianaOffsetMin(zone.name, ms);
-    }
-  }
-  function wallToUtc(zone, wallMs, lon) {
-    let utc = wallMs - zoneOffsetMin(zone, wallMs, lon) * 6e4;
-    utc = wallMs - zoneOffsetMin(zone, utc, lon) * 6e4;
-    return utc;
-  }
-  function formatOffset(min) {
-    const sign = min < 0 ? "−" : "+";
-    const a = Math.abs(Math.round(min));
-    return `${sign}${String(Math.floor(a / 60)).padStart(2, "0")}:${String(a % 60).padStart(2, "0")}`;
   }
 
   // src/core/solveTime.ts
@@ -17544,363 +17760,6 @@ window.__SWP_SITE__ = {
     return { ok: true, result: { results } };
   }
 
-  // src/core/examples.ts
-  var ATM = { pressureHpa: 1010, temperatureC: 10, refraction: true };
-  function sunAt(ms, lat, lon) {
-    return sunPosition(ms, deltaTSeconds(decimalYear(ms)), lat, lon, 0, ATM, true);
-  }
-  var r = (v, d) => v.toFixed(d);
-  function lengthsShot(t2, i, ms, lat, lon, H2, tH, tL, tAz) {
-    const s = sunAt(ms, lat, lon);
-    const L7 = H2 / Math.tan(s.elevation * Math.PI / 180);
-    const sh = newShot(t2("shot.default", { n: i + 1 }));
-    sh.method = "lengths";
-    sh.f.h = r(H2, 2);
-    sh.f.ht = r(tH, 2);
-    sh.f.l = r(L7, 2);
-    sh.f.lt = r(tL, 2);
-    sh.tip = "midpoint";
-    sh.tilt = "0.5";
-    sh.azOn = tAz !== null;
-    sh.az = tAz !== null ? r((s.azimuth + 180) % 360, 1) : "";
-    sh.azt = tAz !== null ? r(tAz, 1) : "";
-    return sh;
-  }
-  var EXAMPLES = [
-    {
-      label: "ex.paris",
-      description: "ex.parisDesc",
-      build(t2) {
-        const lat = 48.8584, lon = 2.2945, ms = Date.UTC(2025, 3, 15, 9, 20);
-        const s = defaultState(t2("shot.default", { n: 1 }));
-        s.site.loc = `${lat}, ${lon}`;
-        s.site.radius = "200";
-        s.cons.yearFrom = s.cons.yearTo = "2025";
-        s.cons.zoneKind = "iana";
-        s.cons.zoneValue = "Europe/Paris";
-        const a = lengthsShot(t2, 0, ms, lat, lon, 1.2, 0.02, 0.04, 4);
-        a.label = t2("ex.bollard");
-        const b = lengthsShot(t2, 1, ms, lat, lon, 5.4, 0.1, 0.16, 3);
-        b.label = t2("ex.lamp");
-        b.relation = "same";
-        s.shots = [a, b];
-        s.claim.time = "2025:04:15 11:20:00";
-        return s;
-      }
-    },
-    {
-      label: "ex.sydney",
-      description: "ex.sydneyDesc",
-      build(t2) {
-        const lat = -33.8568, lon = 151.2153, ms = Date.UTC(2024, 11, 10, 1, 30);
-        const s = defaultState(t2("shot.default", { n: 1 }));
-        s.site.loc = `${lat}, ${lon}`;
-        s.cons.yearFrom = s.cons.yearTo = "2024";
-        s.cons.zoneKind = "iana";
-        s.cons.zoneValue = "Australia/Sydney";
-        const a = lengthsShot(t2, 0, ms, lat, lon, 1.8, 0.04, 0.06, 4);
-        a.label = t2("ex.post1");
-        const b = lengthsShot(t2, 1, ms + 81e5, lat, lon, 1.8, 0.04, 0.06, 4);
-        b.label = t2("ex.post2");
-        b.relation = "other";
-        b.offset = "+02:15:00";
-        b.offsetTol = "2 s";
-        s.shots = [a, b];
-        return s;
-      }
-    },
-    {
-      label: "ex.tromso",
-      description: "ex.tromsoDesc",
-      build(t2) {
-        const lat = 69.6492, lon = 18.9553, ms = Date.UTC(2024, 7, 20, 10, 0);
-        const e = sunAt(ms, lat, lon).elevation;
-        const ratio = Math.tan(e * Math.PI / 180);
-        const s = defaultState(t2("shot.default", { n: 1 }));
-        s.site.loc = `${lat}, ${lon}`;
-        s.site.radius = "2";
-        s.site.radiusUnit = "km";
-        s.cons.yearFrom = s.cons.yearTo = "2024";
-        const a = newShot(t2("ex.building"));
-        a.label = t2("ex.building");
-        a.method = "ratio";
-        a.f.r = r(ratio, 3);
-        a.f.rt = r(ratio * 0.03, 3);
-        a.azOn = false;
-        a.tip = "unknown";
-        s.shots = [a];
-        return s;
-      }
-    },
-    {
-      label: "ex.athens",
-      description: "ex.athensDesc",
-      build(t2) {
-        const lat = 37.9715, lon = 23.7257;
-        const times = [Date.UTC(2023, 5, 2, 6, 30), Date.UTC(2023, 5, 2, 9, 45), Date.UTC(2023, 5, 2, 14, 10)];
-        const s = defaultState(t2("shot.default", { n: 1 }));
-        s.mode = "place";
-        s.shots = times.map((ms, i) => {
-          const sh = lengthsShot(t2, i, ms, lat, lon, 2, 0.02, 0.04, null);
-          sh.label = t2("shot.photo", { n: i + 1 });
-          const d = new Date(ms);
-          sh.time = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:00`;
-          sh.timeOffset = "+00:00";
-          sh.timeTol = "30 s";
-          return sh;
-        });
-        return s;
-      }
-    }
-  ];
-
-  // src/core/parse.ts
-  var NUM = String.raw`-?\d+(?:\.\d+)?`;
-  function valid2(lat, lon) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
-    return { lat, lon };
-  }
-  function fromUrl(t2) {
-    const pairs = [
-      new RegExp(String.raw`!3d(${NUM})!4d(${NUM})`),
-      // Google place pin
-      new RegExp(String.raw`[?&](?:q|query|ll|sll|daddr|center)=(${NUM})(?:,|%2C)\s*(${NUM})`),
-      new RegExp(String.raw`@(${NUM}),(${NUM})`)
-      // Google viewport
-    ];
-    for (const re of pairs) {
-      const m = t2.match(re);
-      if (m) return valid2(Number(m[1]), Number(m[2]));
-    }
-    const osm = t2.match(new RegExp(String.raw`mlat=(${NUM}).*?mlon=(${NUM})`));
-    if (osm) return valid2(Number(osm[1]), Number(osm[2]));
-    const map2 = t2.match(new RegExp(String.raw`#map=\d+(?:\.\d+)?/(${NUM})/(${NUM})`));
-    if (map2) return valid2(Number(map2[1]), Number(map2[2]));
-    return null;
-  }
-  function part(s) {
-    const hemi = (s.match(/[NSEW]/i)?.[0] ?? null)?.toUpperCase() ?? null;
-    const nums = s.match(/-?\d+(?:\.\d+)?/g);
-    if (!nums || nums.length > 3) return null;
-    const [d, m = "0", sec = "0"] = nums;
-    const deg = Number(d);
-    if (Number(m) >= 60 || Number(sec) >= 60) return null;
-    let v = Math.abs(deg) + Number(m) / 60 + Number(sec) / 3600;
-    if (deg < 0 || d.startsWith("-") || hemi === "S" || hemi === "W") v = -v;
-    return { value: v, hemi };
-  }
-  function parseLocation(input) {
-    const raw = input.trim();
-    if (!raw) return null;
-    if (/https?:|www\.|maps|@|#map=|mlat=/i.test(raw)) {
-      const u = fromUrl(decodeURIComponent(raw));
-      if (u) return u;
-    }
-    let t2 = raw.replace(/[′’´`]/g, "'").replace(/[″”“]|''/g, '"').replace(/[º˚]/g, "°");
-    if (t2.includes(";")) t2 = t2.replace(/(\d),(\d)/g, "$1.$2");
-    const letters = [...t2.matchAll(/[NSEW]/gi)];
-    const [l1, l2] = letters;
-    if (letters.length === 2 && l1 && l2) {
-      const i1 = l1.index;
-      const i2 = l2.index;
-      const suffix = /\d/.test(t2.slice(0, i1));
-      const a = suffix ? t2.slice(0, i1 + 1) : t2.slice(0, i2);
-      const b = suffix ? t2.slice(i1 + 1) : t2.slice(i2);
-      const pa = part(a);
-      const pb = part(b.replace(/^[\s,;]+/, ""));
-      if (!pa || !pb) return null;
-      if (pa.hemi === "E" || pa.hemi === "W") return valid2(pb.value, pa.value);
-      return valid2(pa.value, pb.value);
-    }
-    if (letters.length !== 0) return null;
-    const halves = t2.includes(",") || t2.includes(";") ? t2.split(/[,;]/) : null;
-    const [h1, h2] = halves ?? [];
-    if (halves && halves.length === 2 && h1 !== void 0 && h2 !== void 0) {
-      const pa = part(h1);
-      const pb = part(h2);
-      return pa && pb ? valid2(pa.value, pb.value) : null;
-    }
-    const nums = t2.match(/-?\d+(?:\.\d+)?/g) ?? [];
-    if (nums.length === 2 || nums.length === 4 || nums.length === 6) {
-      const h3 = nums.length / 2;
-      const pa = part(nums.slice(0, h3).join(" "));
-      const pb = part(nums.slice(h3).join(" "));
-      return pa && pb ? valid2(pa.value, pb.value) : null;
-    }
-    return null;
-  }
-  function parseDateTime(input) {
-    const m = input.trim().match(
-      /^(\d{4})[-:/.](\d{1,2})[-:/.](\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?\s*(Z|UTC|GMT|[+-]\d{2}(?::?\d{2})?)?$/i
-    );
-    if (!m) return null;
-    const [, y, mo, d, h2 = "0", mi = "0", s = "0", frac = "", off] = m;
-    const month = Number(mo);
-    const day = Number(d);
-    if (month < 1 || month > 12 || day < 1 || day > 31 || Number(h2) > 23 || Number(mi) > 59 || Number(s) > 59) {
-      return null;
-    }
-    const ms = frac ? Math.round(Number(`0.${frac}`) * 1e3) : 0;
-    const wallMs = Date.UTC(Number(y), month - 1, day, Number(h2), Number(mi), Number(s), ms);
-    if (new Date(wallMs).getUTCDate() !== day) return null;
-    return { wallMs, offsetMin: off ? parseOffset(off) : null };
-  }
-  function parseOffset(input) {
-    const t2 = input.trim().toUpperCase().replace(/^(UTC|GMT)/, "").trim();
-    if (t2 === "" || t2 === "Z") return 0;
-    let m = t2.match(/^([+-−])(\d{1,2})(?::?(\d{2}))?$/);
-    if (m) {
-      const v = Number(m[2]) * 60 + Number(m[3] ?? 0);
-      return v > 14 * 60 ? null : m[1] === "+" ? v : -v;
-    }
-    m = t2.match(/^([+-−]?)(\d{1,2}(?:\.\d+)?)$/);
-    if (m) {
-      const v = Math.round(Number(m[2]) * 60);
-      return v > 14 * 60 ? null : m[1] === "-" || m[1] === "−" ? -v : v;
-    }
-    return null;
-  }
-  function parseDuration(input) {
-    const t2 = input.trim().toLowerCase().replace("−", "-");
-    if (!t2) return null;
-    let m = t2.match(/^([+-]?)(\d+):(\d{1,2})(?::(\d{1,2}(?:\.\d+)?))?$/);
-    if (m) {
-      const v = Number(m[2]) * 3600 + Number(m[3]) * 60 + Number(m[4] ?? 0);
-      return m[1] === "-" ? -v : v;
-    }
-    m = t2.match(/^[+-]?\d+(?:\.\d+)?$/);
-    if (m) return Number(t2);
-    const sign = t2.startsWith("-") ? -1 : 1;
-    const body = t2.replace(/^[+-]/, "");
-    const re = /(\d+(?:\.\d+)?)\s*(d|days?|h|hours?|hrs?|m|mins?|minutes?|s|secs?|seconds?)\b/g;
-    let total = 0;
-    let consumed = "";
-    for (const x of body.matchAll(re)) {
-      const v = Number(x[1]);
-      const u = (x[2] ?? "")[0];
-      total += u === "d" ? v * 86400 : u === "h" ? v * 3600 : u === "m" ? v * 60 : v;
-      consumed += x[0];
-    }
-    if (!consumed || body.replace(/\s+/g, "").length !== consumed.replace(/\s+/g, "").length) return null;
-    return sign * total;
-  }
-
-  // src/core/request.ts
-  function parseNumber(s) {
-    const t2 = s.trim().replace(",", ".").replace("−", "-");
-    return t2 === "" ? NaN : Number(t2);
-  }
-  var Collector = class {
-    errors = [];
-    /** `what` is the string-table key of the field's name. */
-    num(key, s, what, opts = {}) {
-      const v = s.trim() === "" && opts.empty !== void 0 ? opts.empty : parseNumber(s);
-      if (!Number.isFinite(v)) this.errors.push({ key, msg: { key: "val.number", vars: { what: { key: what } } } });
-      else if (opts.min !== void 0 && v < opts.min) this.errors.push({ key, msg: { key: "val.min", vars: { what: { key: what }, min: opts.min } } });
-      return v;
-    }
-    add(key, msgKey, vars) {
-      this.errors.push({ key, msg: { key: msgKey, vars } });
-    }
-  };
-  function tolerance(c, key, text, what) {
-    if (!text.trim()) {
-      c.add(key, "val.tolerance", { what: { key: what } });
-      return NaN;
-    }
-    return c.num(key, text, what, { min: 0 });
-  }
-  function bounded(c, sh, base, what, positive) {
-    const v = c.num(`${sh.id}.${base}`, sh.f[base] ?? "", what);
-    const t2 = tolerance(c, `${sh.id}.${base}t`, sh.f[`${base}t`] ?? "", what);
-    if (positive && Number.isFinite(v) && Number.isFinite(t2) && v - t2 <= 0) {
-      c.add(`${sh.id}.${base}t`, "val.toleranceTooBig", { what: { key: what } });
-    }
-    return { kind: "range", min: v - t2, max: v + t2 };
-  }
-  function buildShadow(c, sh) {
-    const elevation = sh.method === "lengths" ? { method: "lengths", height: bounded(c, sh, "h", "field.height", true), shadow: bounded(c, sh, "l", "field.shadow", true) } : sh.method === "ratio" ? { method: "ratio", ratio: bounded(c, sh, "r", "field.ratio", true) } : { method: "angle", angle: bounded(c, sh, "a", "field.elevation", true) };
-    let azimuth = null;
-    if (sh.azOn && sh.az.trim()) {
-      const v = c.num(`${sh.id}.az`, sh.az, "field.direction");
-      const t2 = tolerance(c, `${sh.id}.azt`, sh.azt, "field.direction");
-      azimuth = {
-        shadow: { kind: "range", min: v - t2, max: v + t2 },
-        reference: sh.azRef,
-        declinationDeg: sh.azRef === "magnetic" ? c.num(`${sh.id}.decl`, sh.decl, "field.declination", { empty: 0 }) : 0
-      };
-    }
-    return {
-      elevation,
-      tipEdge: sh.tip,
-      maxTiltDeg: c.num(`${sh.id}.tilt`, sh.tilt, "field.lean", { empty: 0, min: 0 }),
-      azimuth
-    };
-  }
-  function atmosphere(c, s) {
-    return {
-      pressureHpa: c.num("adv.pressure", s.adv.pressure, "field.pressure", { empty: 1010, min: 1 }),
-      temperatureC: c.num("adv.temp", s.adv.temp, "field.temperature", { empty: 10 }),
-      refraction: s.adv.refraction
-    };
-  }
-  function deltaT(c, s) {
-    return s.adv.deltaT.trim() === "" ? null : c.num("adv.deltaT", s.adv.deltaT, "field.deltaT");
-  }
-  function buildSite(c, s) {
-    const ll = parseLocation(s.site.loc);
-    if (!ll) c.add("site.loc", s.site.loc.trim() ? "val.locationBad" : "val.locationNeeded");
-    const r2 = c.num("site.radius", s.site.radius, "field.radius", { empty: 0, min: 0 });
-    return {
-      lat: ll?.lat ?? NaN,
-      lon: ll?.lon ?? NaN,
-      heightM: c.num("site.height", s.site.height, "field.siteHeight", { empty: 0 }),
-      radiusM: s.site.radiusUnit === "km" ? r2 * 1e3 : r2
-    };
-  }
-  function timeShots(c, s) {
-    return s.shots.map((sh, i) => {
-      const shadow = buildShadow(c, sh);
-      let offsetS = 0;
-      let sigma = 0;
-      if (i > 0 && sh.relation === "other") {
-        const o = parseDuration(sh.offset);
-        if (o === null) c.add(`${sh.id}.offset`, "val.gap");
-        offsetS = o ?? 0;
-        const sg = sh.offsetTol.trim() ? parseDuration(sh.offsetTol) : null;
-        if (sg === null || sg < 0) c.add(`${sh.id}.offsetTol`, "val.gapTolerance");
-        sigma = Math.abs(sg ?? 0);
-      }
-      return { id: sh.id, label: sh.label, shadow, offsetS, timeMs: NaN, timeSigmaS: sigma };
-    });
-  }
-  function buildClaimRequest(s) {
-    const c = new Collector();
-    const site = buildSite(c, s);
-    const p = parseDateTime(s.claim.time);
-    if (!p) c.add("claim.time", s.claim.time.trim() ? "val.dateTimeBad" : "val.claimNeeded");
-    let offsetMin = p?.offsetMin ?? null;
-    if (offsetMin === null && s.claim.offset.trim()) {
-      offsetMin = parseOffset(s.claim.offset);
-      if (offsetMin === null) c.add("claim.offset", "val.offsetBad");
-    }
-    const req = {
-      shots: timeShots(c, s),
-      site,
-      atmosphere: atmosphere(c, s),
-      deltaTOverride: deltaT(c, s),
-      wallClockMs: p?.wallMs ?? NaN,
-      offsetMin
-    };
-    return c.errors.length ? { ok: false, errors: c.errors } : { ok: true, req };
-  }
-  function buildShadowOnly(sh) {
-    const c = new Collector();
-    const shadow = buildShadow(c, sh);
-    return c.errors.length ? null : shadow;
-  }
-
   // src/core/solveLocation.ts
   var KM_PER_DEG = Math.PI / 180 * (EARTH_RADIUS_M / 1e3);
 
@@ -17917,7 +17776,6 @@ window.__SWP_SITE__ = {
     const r2 = checkClaim(req.value);
     return r2.ok ? { ok: true, value: { request: req.value, results: r2.result.results } } : invalid([r2.error]);
   }
-  var EXAMPLE_NAMES = EXAMPLES.map((e) => e.label.replace(/^ex\./, ""));
 
   // src/ui/format.ts
   function monthName(i) {
@@ -18025,11 +17883,7 @@ window.__SWP_SITE__ = {
       output
     );
   }
-  function levelText(r2) {
-    if (r2.acceptedLevel === null) return t("claim.outside");
-    if (r2.acceptedLevel === 1) return t("claim.insideBounds");
-    return t("claim.insideLevel", { pct: (r2.acceptedLevel * 100).toFixed(r2.acceptedLevel > 0.99 ? 1 : 0) });
-  }
+  var levelText = (r2) => tm(claimLevel(r2.acceptedLevel));
   function nearest(ms, res) {
     if (!res) return null;
     let out = null;
@@ -18170,6 +18024,116 @@ window.__SWP_SITE__ = {
     render();
     return card;
   }
+
+  // src/core/examples.ts
+  var ATM = { pressureHpa: 1010, temperatureC: 10, refraction: true };
+  function sunAt(ms, lat, lon) {
+    return sunPosition(ms, deltaTSeconds(decimalYear(ms)), lat, lon, 0, ATM, true);
+  }
+  var r = (v, d) => v.toFixed(d);
+  function lengthsShot(t2, i, ms, lat, lon, H2, tH, tL, tAz) {
+    const s = sunAt(ms, lat, lon);
+    const L7 = H2 / Math.tan(s.elevation * Math.PI / 180);
+    const sh = newShot(t2("shot.default", { n: i + 1 }));
+    sh.method = "lengths";
+    sh.f.h = r(H2, 2);
+    sh.f.ht = r(tH, 2);
+    sh.f.l = r(L7, 2);
+    sh.f.lt = r(tL, 2);
+    sh.tip = "midpoint";
+    sh.tilt = "0.5";
+    sh.azOn = tAz !== null;
+    sh.az = tAz !== null ? r((s.azimuth + 180) % 360, 1) : "";
+    sh.azt = tAz !== null ? r(tAz, 1) : "";
+    return sh;
+  }
+  var EXAMPLES = [
+    {
+      label: "ex.paris",
+      description: "ex.parisDesc",
+      build(t2) {
+        const lat = 48.8584, lon = 2.2945, ms = Date.UTC(2025, 3, 15, 9, 20);
+        const s = defaultState(t2("shot.default", { n: 1 }));
+        s.site.loc = `${lat}, ${lon}`;
+        s.site.radius = "200";
+        s.cons.yearFrom = s.cons.yearTo = "2025";
+        s.cons.zoneKind = "iana";
+        s.cons.zoneValue = "Europe/Paris";
+        const a = lengthsShot(t2, 0, ms, lat, lon, 1.2, 0.02, 0.04, 4);
+        a.label = t2("ex.bollard");
+        const b = lengthsShot(t2, 1, ms, lat, lon, 5.4, 0.1, 0.16, 3);
+        b.label = t2("ex.lamp");
+        b.relation = "same";
+        s.shots = [a, b];
+        s.claim.time = "2025:04:15 11:20:00";
+        return s;
+      }
+    },
+    {
+      label: "ex.sydney",
+      description: "ex.sydneyDesc",
+      build(t2) {
+        const lat = -33.8568, lon = 151.2153, ms = Date.UTC(2024, 11, 10, 1, 30);
+        const s = defaultState(t2("shot.default", { n: 1 }));
+        s.site.loc = `${lat}, ${lon}`;
+        s.cons.yearFrom = s.cons.yearTo = "2024";
+        s.cons.zoneKind = "iana";
+        s.cons.zoneValue = "Australia/Sydney";
+        const a = lengthsShot(t2, 0, ms, lat, lon, 1.8, 0.04, 0.06, 4);
+        a.label = t2("ex.post1");
+        const b = lengthsShot(t2, 1, ms + 81e5, lat, lon, 1.8, 0.04, 0.06, 4);
+        b.label = t2("ex.post2");
+        b.relation = "other";
+        b.offset = "+02:15:00";
+        b.offsetTol = "2 s";
+        s.shots = [a, b];
+        return s;
+      }
+    },
+    {
+      label: "ex.tromso",
+      description: "ex.tromsoDesc",
+      build(t2) {
+        const lat = 69.6492, lon = 18.9553, ms = Date.UTC(2024, 7, 20, 10, 0);
+        const e = sunAt(ms, lat, lon).elevation;
+        const ratio = Math.tan(e * Math.PI / 180);
+        const s = defaultState(t2("shot.default", { n: 1 }));
+        s.site.loc = `${lat}, ${lon}`;
+        s.site.radius = "2";
+        s.site.radiusUnit = "km";
+        s.cons.yearFrom = s.cons.yearTo = "2024";
+        const a = newShot(t2("ex.building"));
+        a.label = t2("ex.building");
+        a.method = "ratio";
+        a.f.r = r(ratio, 3);
+        a.f.rt = r(ratio * 0.03, 3);
+        a.azOn = false;
+        a.tip = "unknown";
+        s.shots = [a];
+        return s;
+      }
+    },
+    {
+      label: "ex.athens",
+      description: "ex.athensDesc",
+      build(t2) {
+        const lat = 37.9715, lon = 23.7257;
+        const times = [Date.UTC(2023, 5, 2, 6, 30), Date.UTC(2023, 5, 2, 9, 45), Date.UTC(2023, 5, 2, 14, 10)];
+        const s = defaultState(t2("shot.default", { n: 1 }));
+        s.mode = "place";
+        s.shots = times.map((ms, i) => {
+          const sh = lengthsShot(t2, i, ms, lat, lon, 2, 0.02, 0.04, null);
+          sh.label = t2("shot.photo", { n: i + 1 });
+          const d = new Date(ms);
+          sh.time = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:00`;
+          sh.timeOffset = "+00:00";
+          sh.timeTol = "30 s";
+          return sh;
+        });
+        return s;
+      }
+    }
+  ];
 
   // src/features/examples/examples.ts
   function exampleButtons(load) {
@@ -19985,11 +19949,11 @@ window.__SWP_SITE__ = {
   var ROW_LIMIT = 30;
   function todRange(c, zone, lon) {
     const mins = c.windows.flatMap((w) => [w.startMs, w.endMs]);
-    const tod = (ms) => {
+    const tod2 = (ms) => {
       const hhmm = fmtTime(ms, zone, lon);
       return Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3));
     };
-    const vals = mins.map(tod);
+    const vals = mins.map(tod2);
     const lo = Math.min(...vals);
     const hi = Math.max(...vals);
     const f = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
@@ -20607,6 +20571,8 @@ window.__SWP_SITE__ = {
       observations: res.observations
     };
   }
+  var exportTime = (s) => ({ request: s.request, results: timeResults(s.result) });
+  var exportPlace = (s) => ({ request: s.request, results: placeResults(s.result) });
 
   // src/features/share-export/report.ts
   async function sha256(text) {
@@ -20619,7 +20585,7 @@ window.__SWP_SITE__ = {
   }
   async function exportReport(state, solved) {
     const inputs2 = JSON.stringify(state);
-    const results = solved?.mode === "time" ? timeResults(solved.res) : solved?.mode === "place" ? placeResults(solved.res) : null;
+    const exported = solved?.mode === "time" ? exportTime({ request: solved.req, result: solved.res }) : solved?.mode === "place" ? exportPlace({ request: solved.req, result: solved.res }) : null;
     const site = platform().site;
     const report = {
       application: { name: site.title, version: site.version, buildDate: site.date, edition: site.mode === "single" ? "offline copy" : "site", url: location.origin + location.pathname },
@@ -20636,8 +20602,8 @@ window.__SWP_SITE__ = {
       },
       inputsSha256: await sha256(inputs2),
       inputs: state,
-      request: solved?.req ?? null,
-      results
+      request: exported?.request ?? null,
+      results: exported?.results ?? null
     };
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
@@ -20712,7 +20678,7 @@ window.__SWP_SITE__ = {
         h("hr"),
         item("export-json", t("export.json"), t("export.jsonSub"), () => {
           close();
-          void exportReport(cases2.state, session2.solved);
+          void exportReport(cases2.state, session2.status.kind === "done" ? session2.solved : null);
         }),
         item("export-print", t("export.print"), null, () => {
           close();
@@ -20754,7 +20720,6 @@ window.__SWP_SITE__ = {
   // src/main.ts
   var platform2 = startPlatform({ strings: STRINGS });
   setPlatform(platform2);
-  var shotLabel = (n) => t("shot.default", { n });
   var shared = platform2.share.incoming !== null ? parseCase(platform2.share.incoming, shotLabel) : null;
   var cases = new CaseStore(shared ?? loadCase(platform2, shotLabel) ?? defaultState(shotLabel(1)));
   var view = new ViewState(platform2, !untouched(cases.state));

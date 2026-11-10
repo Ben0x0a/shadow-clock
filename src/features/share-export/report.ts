@@ -13,7 +13,7 @@
  * forensic traceability artefacts.
  */
 
-import { placeResults, timeResults } from "../../api/results.ts";
+import { exportPlace, exportTime } from "../../api/results.ts";
 import * as cfg from "../../core/config.ts";
 import type { AppState } from "../../core/form.ts";
 import type { Solved } from "../../state/solve.ts";
@@ -34,7 +34,10 @@ function stamp(d = new Date()): string {
 
 export async function exportReport(state: AppState, solved: Solved | null): Promise<void> {
   const inputs = JSON.stringify(state);
-  const results = solved?.mode === "time" ? timeResults(solved.res) : solved?.mode === "place" ? placeResults(solved.res) : null;
+  // The same export as the command line's output (api/results.ts).
+  const exported = solved?.mode === "time"
+    ? exportTime({ request: solved.req, result: solved.res })
+    : solved?.mode === "place" ? exportPlace({ request: solved.req, result: solved.res }) : null;
   const site = platform().site;
   const report = {
     application: { name: site.title, version: site.version, buildDate: site.date, edition: site.mode === "single" ? "offline copy" : "site", url: location.origin + location.pathname },
@@ -51,8 +54,8 @@ export async function exportReport(state: AppState, solved: Solved | null): Prom
     },
     inputsSha256: await sha256(inputs),
     inputs: state,
-    request: solved?.req ?? null,
-    results,
+    request: exported?.request ?? null,
+    results: exported?.results ?? null,
   };
   const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
   const a = document.createElement("a");

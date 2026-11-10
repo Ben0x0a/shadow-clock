@@ -3,7 +3,7 @@
  *
  * Defines: EXAMPLES (label, description, build()).
  * Used by: features/examples (Examples menu), api/operations.ts (example), tests.
- * Depends on: core/spa.ts, core/deltaT.ts, core/form.ts.
+ * Depends on: core/spa.ts, core/deltaT.ts, core/form.ts, core/message.ts (Translate).
  *
  * HOW: each example starts from a true place and time and generates the shadow
  * measurements from the SPA, rounded to what a real measurement would give. The examples
@@ -14,9 +14,9 @@
 import { decimalYear, deltaTSeconds } from "./deltaT.ts";
 import { type AppState, defaultState, newShot, type ShotState } from "./form.ts";
 import { sunPosition } from "./spa.ts";
+// The translation function is passed in: the core has no string table.
+import type { Translate } from "./message.ts";
 
-/** The UI's translation function, passed in (the core has no string table). */
-export type Translate = (key: string, vars?: Record<string, string | number>) => string;
 
 const ATM = { pressureHpa: 1010, temperatureC: 10, refraction: true };
 

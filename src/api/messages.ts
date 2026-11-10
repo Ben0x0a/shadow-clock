@@ -2,15 +2,16 @@
  * messages.ts — the English text of every message the computation produces (errors,
  * warnings, field names, budget terms, shadow names, examples), and its formatter.
  *
- * Defines: MESSAGES (key → text), formatMessage().
- * Used by: strings.ts (spread into the page's string table), api/ operations, cli/main.ts.
- * Depends on: core/models.ts (Message).
+ * Defines: MESSAGES (key → text), translate(), formatMessage().
+ * Used by: strings.ts (spread into the page's string table), api/ operations, cli/.
+ * Depends on: core/models.ts (Message), core/message.ts (renderMessage, shared with the page).
  *
  * WHY here and not in strings.ts: the page and the command line must word results the
- * same way, and the command line may not import the page's string table (layer rules:
+ * same way (one table, one renderer), and the command line may not import the page's string table (layer rules:
  * cli/ sees only api/ and core/). The core still has no string table: it emits keys.
  */
 
+import { renderMessage } from "../core/message.ts";
 import type { Message } from "../core/models.ts";
 
 export const MESSAGES: Record<string, string> = {
@@ -120,6 +121,20 @@ export const MESSAGES: Record<string, string> = {
   "ex.building": "Building",
   "ex.athens": "Find the place: three photos",
   "ex.athensDesc": "Athens, 2 Jun 2023 at 06:30, 09:45 and 14:10 UTC. Elevation only — the three rings cross at one place.",
+
+  // ---- Progress phases (sent by the solvers while they run)
+  "progress.scanning": "Scanning {year}",
+  "progress.refining": "Refining {year}",
+  "progress.heatmap": "Drawing the year map",
+  "progress.map": "Refining the map",
+  "progress.regions": "Grouping areas",
+
+  // ---- Claimed-time verdict levels
+  "claim.consistent": "Consistent with the shadows",
+  "claim.inconsistent": "Not consistent with the shadows",
+  "claim.outside": "outside the 99.7 % region",
+  "claim.insideBounds": "inside all bounds",
+  "claim.insideLevel": "inside the {pct} % region",
 };
 
 /** Fills {name} placeholders; an unknown key throws, as the page's t() does. */
@@ -129,10 +144,7 @@ export function translate(key: string, vars: Record<string, string | number> = {
   return text.replace(/\{(\w+)\}/g, (all, name: string) => (name in vars ? String(vars[name]) : all));
 }
 
-/** Renders a core message (key + values, values possibly messages themselves). */
+/** Renders a core message with this table (the page renders the same way with its t()). */
 export function formatMessage(m: Message): string {
-  const vars: Record<string, string | number> = {};
-  for (const [k, v] of Object.entries(m.vars ?? {})) vars[k] = typeof v === "object" ? formatMessage(v) : v;
-  const text = translate(m.key, vars);
-  return m.shot ? translate("msg.forShadow", { shot: m.shot, text }) : text;
+  return renderMessage(m, translate);
 }

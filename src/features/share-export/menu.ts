@@ -81,7 +81,9 @@ export function mountShareMenu(slot: HTMLElement, deps: ShareDeps): void {
       h("hr"),
       item("export-json", t("export.json"), t("export.jsonSub"), () => {
         close();
-        void exportReport(cases.state, session.solved);
+        // Results only when they belong to the current inputs: a stale result (a newer
+        // job running) next to the new inputs would make the report contradict itself.
+        void exportReport(cases.state, session.status.kind === "done" ? session.solved : null);
       }),
       item("export-print", t("export.print"), null, () => {
         close();

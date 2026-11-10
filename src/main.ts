@@ -4,7 +4,8 @@
  *
  * Defines: nothing exported; runs once on load (bundler entry, site.json "entry").
  * Used by: swp build.
- * Depends on: static-web-platform, strings.ts, core/form.ts, core/examples.ts,
+ * Depends on: static-web-platform, strings.ts, api/case.ts (shotLabel, shared with the
+ *             command line), core/form.ts, core/examples.ts,
  *             state/*, ui/context.ts, ui/toast.ts, features/*, app.css.
  *
  * Flow: every change of the case → structural? the features rebuild their panels →
@@ -16,6 +17,7 @@
  */
 
 import { byId, startPlatform } from "static-web-platform";
+import { shotLabel } from "./api/case.ts";
 import type { Example } from "./core/examples.ts";
 import { defaultState, parseCase } from "./core/form.ts";
 import { CaseStore, loadCase, saveCaseSoon, untouched } from "./state/case.ts";
@@ -39,7 +41,6 @@ const platform = startPlatform({ strings: STRINGS });
 setPlatform(platform);
 
 // ---- Shared state ----------------------------------------------------------------------
-const shotLabel = (n: number) => t("shot.default", { n });
 const shared = platform.share.incoming !== null ? parseCase(platform.share.incoming, shotLabel) : null;
 const cases = new CaseStore(shared ?? loadCase(platform, shotLabel) ?? defaultState(shotLabel(1)));
 const view = new ViewState(platform, !untouched(cases.state));

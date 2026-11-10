@@ -1,10 +1,10 @@
 {
-  "version": "923efecc21ca",
+  "version": "3762a808e038",
   "date": "2026-11-10",
   "download": "shadowclock.html",
-  "sha256": "2042cade9310f3e4f85e19db146177c62d64baaa97287bc8bf6b27509044a040",
+  "sha256": "7c49d4e59376269172e11961332b9d1e2c162d179ec90602a70e1d340e308eb8",
   "cli": {
     "file": "shadowclock-cli.js",
-    "sha256": "cfd1cc4beca75ef6be926f8df30140ac73c5888a9f9681c1e027e0b695b68f65"
+    "sha256": "55573b83958929a0178c8cba97d3fcfcbc40e05e4d9017d85249ab6097f110ef"
   }
 }

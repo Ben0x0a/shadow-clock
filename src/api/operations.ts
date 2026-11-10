@@ -1,12 +1,11 @@
 /**
  * operations.ts — ShadowClock's operations: one function per thing the app computes.
  *
- * Defines: findTime(), findPlace(), checkClaim(), example(), EXAMPLE_NAMES, ClaimValue.
+ * Defines: findTime(), findPlace(), checkClaim(), ClaimValue.
  * Used by: cli/commands.ts (one command each), workers/solver.ts (findTime, findPlace:
  *          the page's live solving), features/claim (checkClaim).
  * Depends on: core/request.ts (case → request, validation), core/solveTime.ts,
- *             core/solveLocation.ts, core/claimCheck.ts, core/examples.ts, api/results.ts,
- *             api/messages.ts.
+ *             core/solveLocation.ts, core/claimCheck.ts, api/results.ts, api/messages.ts.
  *
  * HOW: each operation takes a case (AppState, read with readCase()), validates it, builds
  * the solver request, solves it, and returns the request with the full result, so the
@@ -19,14 +18,13 @@
  */
 
 import { checkClaim as solveClaim } from "../core/claimCheck.ts";
-import { EXAMPLES } from "../core/examples.ts";
 import type { AppState } from "../core/form.ts";
 import type { ClaimOffsetResult, ClaimRequest, Message } from "../core/models.ts";
 import { buildClaimRequest, buildPlaceRequest, buildTimeRequest, type Built } from "../core/request.ts";
 import { solveLocation } from "../core/solveLocation.ts";
 import { type Progress, solveTime } from "../core/solveTime.ts";
 import type { ApiResult } from "./case.ts";
-import { formatMessage, translate } from "./messages.ts";
+import { formatMessage } from "./messages.ts";
 import type { PlaceSolved, TimeSolved } from "./results.ts";
 
 export interface ClaimValue { request: ClaimRequest; results: ClaimOffsetResult[] }
@@ -62,15 +60,4 @@ export function checkClaim(state: AppState): ApiResult<ClaimValue> {
   if (!req.ok) return req;
   const r = solveClaim(req.value);
   return r.ok ? { ok: true, value: { request: req.value, results: r.result.results } } : invalid([r.error]);
-}
-
-/** Example names on the command line: the string key without its "ex." prefix. */
-export const EXAMPLE_NAMES = EXAMPLES.map((e) => e.label.replace(/^ex\./, ""));
-
-/** A built-in example case (physically consistent; its description states the true answer). */
-export function example(name: string): ApiResult<AppState> {
-  const i = EXAMPLE_NAMES.indexOf(name);
-  const ex = EXAMPLES[i];
-  if (!ex) return { ok: false, code: "unknown-example", message: `Unknown example "${name}". Known: ${EXAMPLE_NAMES.join(", ")}.` };
-  return { ok: true, value: ex.build(translate) };
 }

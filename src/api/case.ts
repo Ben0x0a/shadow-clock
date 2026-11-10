@@ -2,7 +2,8 @@
  * case.ts — reads a case from bytes: a saved case, or the inputs of an exported report.
  *
  * Defines: ApiResult, readCase(), shotLabel().
- * Used by: api/operations.ts, cli/main.ts.
+ * Used by: api/operations.ts, cli/commands.ts; main.ts (shotLabel: the page names shadows
+ *          the same way).
  * Depends on: core/form.ts (parseCase), api/messages.ts.
  *
  * HOW: the bytes must be UTF-8 JSON. A JSON report exported by the page

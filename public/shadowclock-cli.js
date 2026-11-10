@@ -209,7 +209,7 @@ function denoIo() {
 function startCli(spec) {
   if (!import.meta.main) return;
   const io = denoIo();
-  runCli(spec, Deno.args, { version: "923efecc21ca", date: "2026-11-10" }, io).then((code) => Deno.exit(code)).catch(async (err) => {
+  runCli(spec, Deno.args, { version: "3762a808e038", date: "2026-11-10" }, io).then((code) => Deno.exit(code)).catch(async (err) => {
     await io.err(`${spec.name}: internal error: ${err instanceof Error ? err.stack ?? err.message : String(err)}
 `);
     Deno.exit(EXIT.internal);
@@ -309,6 +309,19 @@ function merge(base, src) {
     if (x !== void 0 && typeof x === typeof v && (typeof v === "string" || typeof v === "boolean") && (!CHOICES[k] || CHOICES[k].includes(x))) out[k] = x;
   }
   return out;
+}
+
+// src/core/message.ts
+function renderMessage(m, tr) {
+  const vars = {};
+  for (const [k, v] of Object.entries(m.vars ?? {})) vars[k] = typeof v === "object" ? renderMessage(v, tr) : v;
+  const text = tr(m.key, vars);
+  return m.shot ? tr("msg.forShadow", { shot: m.shot, text }) : text;
+}
+function claimLevel(acceptedLevel2) {
+  if (acceptedLevel2 === null) return { key: "claim.outside" };
+  if (acceptedLevel2 === 1) return { key: "claim.insideBounds" };
+  return { key: "claim.insideLevel", vars: { pct: (acceptedLevel2 * 100).toFixed(acceptedLevel2 > 0.99 ? 1 : 0) } };
 }
 
 // src/api/messages.ts
@@ -414,7 +427,19 @@ var MESSAGES = {
   "ex.tromsoDesc": "Tromsø, 20 Aug 2024 10:00 UTC. Only the ratio of a building's height to its shadow is known, with a tolerance.",
   "ex.building": "Building",
   "ex.athens": "Find the place: three photos",
-  "ex.athensDesc": "Athens, 2 Jun 2023 at 06:30, 09:45 and 14:10 UTC. Elevation only — the three rings cross at one place."
+  "ex.athensDesc": "Athens, 2 Jun 2023 at 06:30, 09:45 and 14:10 UTC. Elevation only — the three rings cross at one place.",
+  // ---- Progress phases (sent by the solvers while they run)
+  "progress.scanning": "Scanning {year}",
+  "progress.refining": "Refining {year}",
+  "progress.heatmap": "Drawing the year map",
+  "progress.map": "Refining the map",
+  "progress.regions": "Grouping areas",
+  // ---- Claimed-time verdict levels
+  "claim.consistent": "Consistent with the shadows",
+  "claim.inconsistent": "Not consistent with the shadows",
+  "claim.outside": "outside the 99.7 % region",
+  "claim.insideBounds": "inside all bounds",
+  "claim.insideLevel": "inside the {pct} % region"
 };
 function translate(key, vars = {}) {
   const text = MESSAGES[key];
@@ -422,10 +447,7 @@ function translate(key, vars = {}) {
   return text.replace(/\{(\w+)\}/g, (all, name) => name in vars ? String(vars[name]) : all);
 }
 function formatMessage(m) {
-  const vars = {};
-  for (const [k, v] of Object.entries(m.vars ?? {})) vars[k] = typeof v === "object" ? formatMessage(v) : v;
-  const text = translate(m.key, vars);
-  return m.shot ? translate("msg.forShadow", { shot: m.shot, text }) : text;
+  return renderMessage(m, translate);
 }
 
 // src/api/case.ts
@@ -1798,116 +1820,6 @@ function checkClaim(req) {
   return { ok: true, result: { results } };
 }
 
-// src/core/examples.ts
-var ATM = { pressureHpa: 1010, temperatureC: 10, refraction: true };
-function sunAt(ms, lat, lon) {
-  return sunPosition(ms, deltaTSeconds(decimalYear(ms)), lat, lon, 0, ATM, true);
-}
-var r = (v, d) => v.toFixed(d);
-function lengthsShot(t, i, ms, lat, lon, H, tH, tL, tAz) {
-  const s = sunAt(ms, lat, lon);
-  const L = H / Math.tan(s.elevation * Math.PI / 180);
-  const sh = newShot(t("shot.default", { n: i + 1 }));
-  sh.method = "lengths";
-  sh.f.h = r(H, 2);
-  sh.f.ht = r(tH, 2);
-  sh.f.l = r(L, 2);
-  sh.f.lt = r(tL, 2);
-  sh.tip = "midpoint";
-  sh.tilt = "0.5";
-  sh.azOn = tAz !== null;
-  sh.az = tAz !== null ? r((s.azimuth + 180) % 360, 1) : "";
-  sh.azt = tAz !== null ? r(tAz, 1) : "";
-  return sh;
-}
-var EXAMPLES = [
-  {
-    label: "ex.paris",
-    description: "ex.parisDesc",
-    build(t) {
-      const lat = 48.8584, lon = 2.2945, ms = Date.UTC(2025, 3, 15, 9, 20);
-      const s = defaultState(t("shot.default", { n: 1 }));
-      s.site.loc = `${lat}, ${lon}`;
-      s.site.radius = "200";
-      s.cons.yearFrom = s.cons.yearTo = "2025";
-      s.cons.zoneKind = "iana";
-      s.cons.zoneValue = "Europe/Paris";
-      const a = lengthsShot(t, 0, ms, lat, lon, 1.2, 0.02, 0.04, 4);
-      a.label = t("ex.bollard");
-      const b = lengthsShot(t, 1, ms, lat, lon, 5.4, 0.1, 0.16, 3);
-      b.label = t("ex.lamp");
-      b.relation = "same";
-      s.shots = [a, b];
-      s.claim.time = "2025:04:15 11:20:00";
-      return s;
-    }
-  },
-  {
-    label: "ex.sydney",
-    description: "ex.sydneyDesc",
-    build(t) {
-      const lat = -33.8568, lon = 151.2153, ms = Date.UTC(2024, 11, 10, 1, 30);
-      const s = defaultState(t("shot.default", { n: 1 }));
-      s.site.loc = `${lat}, ${lon}`;
-      s.cons.yearFrom = s.cons.yearTo = "2024";
-      s.cons.zoneKind = "iana";
-      s.cons.zoneValue = "Australia/Sydney";
-      const a = lengthsShot(t, 0, ms, lat, lon, 1.8, 0.04, 0.06, 4);
-      a.label = t("ex.post1");
-      const b = lengthsShot(t, 1, ms + 81e5, lat, lon, 1.8, 0.04, 0.06, 4);
-      b.label = t("ex.post2");
-      b.relation = "other";
-      b.offset = "+02:15:00";
-      b.offsetTol = "2 s";
-      s.shots = [a, b];
-      return s;
-    }
-  },
-  {
-    label: "ex.tromso",
-    description: "ex.tromsoDesc",
-    build(t) {
-      const lat = 69.6492, lon = 18.9553, ms = Date.UTC(2024, 7, 20, 10, 0);
-      const e = sunAt(ms, lat, lon).elevation;
-      const ratio = Math.tan(e * Math.PI / 180);
-      const s = defaultState(t("shot.default", { n: 1 }));
-      s.site.loc = `${lat}, ${lon}`;
-      s.site.radius = "2";
-      s.site.radiusUnit = "km";
-      s.cons.yearFrom = s.cons.yearTo = "2024";
-      const a = newShot(t("ex.building"));
-      a.label = t("ex.building");
-      a.method = "ratio";
-      a.f.r = r(ratio, 3);
-      a.f.rt = r(ratio * 0.03, 3);
-      a.azOn = false;
-      a.tip = "unknown";
-      s.shots = [a];
-      return s;
-    }
-  },
-  {
-    label: "ex.athens",
-    description: "ex.athensDesc",
-    build(t) {
-      const lat = 37.9715, lon = 23.7257;
-      const times = [Date.UTC(2023, 5, 2, 6, 30), Date.UTC(2023, 5, 2, 9, 45), Date.UTC(2023, 5, 2, 14, 10)];
-      const s = defaultState(t("shot.default", { n: 1 }));
-      s.mode = "place";
-      s.shots = times.map((ms, i) => {
-        const sh = lengthsShot(t, i, ms, lat, lon, 2, 0.02, 0.04, null);
-        sh.label = t("shot.photo", { n: i + 1 });
-        const d = new Date(ms);
-        sh.time = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:00`;
-        sh.timeOffset = "+00:00";
-        sh.timeTol = "30 s";
-        return sh;
-      });
-      return s;
-    }
-  }
-];
-
 // src/core/parse.ts
 var NUM = String.raw`-?\d+(?:\.\d+)?`;
 function valid2(lat, lon) {
@@ -2416,10 +2328,121 @@ function checkClaim2(state) {
   const r2 = checkClaim(req.value);
   return r2.ok ? { ok: true, value: { request: req.value, results: r2.result.results } } : invalid([r2.error]);
 }
+
+// src/core/examples.ts
+var ATM = { pressureHpa: 1010, temperatureC: 10, refraction: true };
+function sunAt(ms, lat, lon) {
+  return sunPosition(ms, deltaTSeconds(decimalYear(ms)), lat, lon, 0, ATM, true);
+}
+var r = (v, d) => v.toFixed(d);
+function lengthsShot(t, i, ms, lat, lon, H, tH, tL, tAz) {
+  const s = sunAt(ms, lat, lon);
+  const L = H / Math.tan(s.elevation * Math.PI / 180);
+  const sh = newShot(t("shot.default", { n: i + 1 }));
+  sh.method = "lengths";
+  sh.f.h = r(H, 2);
+  sh.f.ht = r(tH, 2);
+  sh.f.l = r(L, 2);
+  sh.f.lt = r(tL, 2);
+  sh.tip = "midpoint";
+  sh.tilt = "0.5";
+  sh.azOn = tAz !== null;
+  sh.az = tAz !== null ? r((s.azimuth + 180) % 360, 1) : "";
+  sh.azt = tAz !== null ? r(tAz, 1) : "";
+  return sh;
+}
+var EXAMPLES = [
+  {
+    label: "ex.paris",
+    description: "ex.parisDesc",
+    build(t) {
+      const lat = 48.8584, lon = 2.2945, ms = Date.UTC(2025, 3, 15, 9, 20);
+      const s = defaultState(t("shot.default", { n: 1 }));
+      s.site.loc = `${lat}, ${lon}`;
+      s.site.radius = "200";
+      s.cons.yearFrom = s.cons.yearTo = "2025";
+      s.cons.zoneKind = "iana";
+      s.cons.zoneValue = "Europe/Paris";
+      const a = lengthsShot(t, 0, ms, lat, lon, 1.2, 0.02, 0.04, 4);
+      a.label = t("ex.bollard");
+      const b = lengthsShot(t, 1, ms, lat, lon, 5.4, 0.1, 0.16, 3);
+      b.label = t("ex.lamp");
+      b.relation = "same";
+      s.shots = [a, b];
+      s.claim.time = "2025:04:15 11:20:00";
+      return s;
+    }
+  },
+  {
+    label: "ex.sydney",
+    description: "ex.sydneyDesc",
+    build(t) {
+      const lat = -33.8568, lon = 151.2153, ms = Date.UTC(2024, 11, 10, 1, 30);
+      const s = defaultState(t("shot.default", { n: 1 }));
+      s.site.loc = `${lat}, ${lon}`;
+      s.cons.yearFrom = s.cons.yearTo = "2024";
+      s.cons.zoneKind = "iana";
+      s.cons.zoneValue = "Australia/Sydney";
+      const a = lengthsShot(t, 0, ms, lat, lon, 1.8, 0.04, 0.06, 4);
+      a.label = t("ex.post1");
+      const b = lengthsShot(t, 1, ms + 81e5, lat, lon, 1.8, 0.04, 0.06, 4);
+      b.label = t("ex.post2");
+      b.relation = "other";
+      b.offset = "+02:15:00";
+      b.offsetTol = "2 s";
+      s.shots = [a, b];
+      return s;
+    }
+  },
+  {
+    label: "ex.tromso",
+    description: "ex.tromsoDesc",
+    build(t) {
+      const lat = 69.6492, lon = 18.9553, ms = Date.UTC(2024, 7, 20, 10, 0);
+      const e = sunAt(ms, lat, lon).elevation;
+      const ratio = Math.tan(e * Math.PI / 180);
+      const s = defaultState(t("shot.default", { n: 1 }));
+      s.site.loc = `${lat}, ${lon}`;
+      s.site.radius = "2";
+      s.site.radiusUnit = "km";
+      s.cons.yearFrom = s.cons.yearTo = "2024";
+      const a = newShot(t("ex.building"));
+      a.label = t("ex.building");
+      a.method = "ratio";
+      a.f.r = r(ratio, 3);
+      a.f.rt = r(ratio * 0.03, 3);
+      a.azOn = false;
+      a.tip = "unknown";
+      s.shots = [a];
+      return s;
+    }
+  },
+  {
+    label: "ex.athens",
+    description: "ex.athensDesc",
+    build(t) {
+      const lat = 37.9715, lon = 23.7257;
+      const times = [Date.UTC(2023, 5, 2, 6, 30), Date.UTC(2023, 5, 2, 9, 45), Date.UTC(2023, 5, 2, 14, 10)];
+      const s = defaultState(t("shot.default", { n: 1 }));
+      s.mode = "place";
+      s.shots = times.map((ms, i) => {
+        const sh = lengthsShot(t, i, ms, lat, lon, 2, 0.02, 0.04, null);
+        sh.label = t("shot.photo", { n: i + 1 });
+        const d = new Date(ms);
+        sh.time = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:00`;
+        sh.timeOffset = "+00:00";
+        sh.timeTol = "30 s";
+        return sh;
+      });
+      return s;
+    }
+  }
+];
+
+// src/api/examples.ts
 var EXAMPLE_NAMES = EXAMPLES.map((e) => e.label.replace(/^ex\./, ""));
 function example(name) {
-  const i = EXAMPLE_NAMES.indexOf(name);
-  const ex = EXAMPLES[i];
+  const ex = EXAMPLES[EXAMPLE_NAMES.indexOf(name)];
   if (!ex) return { ok: false, code: "unknown-example", message: `Unknown example "${name}". Known: ${EXAMPLE_NAMES.join(", ")}.` };
   return { ok: true, value: ex.build(translate) };
 }
@@ -2481,9 +2504,8 @@ function placeText(v) {
   return head + lines.join("") + warnings(r2.warnings);
 }
 function level(r2) {
-  if (r2.acceptedLevel === null) return "outside the 99.7 % region: inconsistent";
-  if (r2.acceptedLevel === 1) return "inside every declared bound: consistent";
-  return `inside the ${(r2.acceptedLevel * 100).toFixed(r2.acceptedLevel > 0.99 ? 1 : 0)} % region: consistent`;
+  const verdict = formatMessage({ key: r2.acceptedLevel !== null ? "claim.consistent" : "claim.inconsistent" });
+  return `${formatMessage(claimLevel(r2.acceptedLevel))}: ${verdict}`;
 }
 function claimText(v) {
   const line = (r2) => `UTC offset ${formatOffset(r2.offsetMin)} → ${utc(r2.utcMs)}: ${level(r2)}
