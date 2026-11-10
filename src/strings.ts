@@ -3,17 +3,21 @@
  *
  * Defines: STRINGS (the app's string table, passed to startPlatform()).
  * Used by: main.ts; every ui/ and features/ module reads it through ui/context.ts t().
- * Depends on: static-web-platform (StringTable type).
+ * Depends on: static-web-platform (StringTable type), api/messages.ts (MESSAGES).
  *
  * WHY one table: the static-web-app rule — one language per app, no inline UI text, and a
  * missing key throws (so the verification gate catches it). Keys are grouped by screen.
- * Placeholders use {name} and are filled by t(key, { name }).
+ * Placeholders use {name} and are filled by t(key, { name }). The computation's own
+ * messages (errors, warnings, field and shadow names, examples) live in api/messages.ts,
+ * shared with the command line, and are spread in here.
  */
 
 import type { StringTable } from "static-web-platform";
+import { MESSAGES } from "./api/messages.ts";
 
 export const STRINGS: StringTable = {
   en: {
+    ...MESSAGES,
     // ---- App shell
     "app.tagline": "Time & place from shadows",
     "app.skip": "Skip to content",
@@ -31,7 +35,6 @@ export const STRINGS: StringTable = {
     "app.findPlace": "Find the place",
     "app.findPlaceTitle": "Known times → where was it taken?",
     "app.settings": "Settings",
-    "msg.forShadow": "{shot}: {text}",
 
     // ---- Expert-view panel titles
     "panel.where": "Where was it taken?",
@@ -136,98 +139,7 @@ export const STRINGS: StringTable = {
     "info.more": "More about {title}",
     "info.title": "More information",
     "info.ok": "Got it",
-    "shot.default": "Shadow {n}",
-    "shot.object": "Object {n}",
-    "shot.photo": "Photo {n}",
     "shot.copyOf": "{label} (copy)",
-
-    // ---- Core: errors
-    "core.err.field": "{field}: {reason}",
-    "core.field.heightShadow": "Height/shadow",
-    "core.field.ratio": "Ratio",
-    "core.field.elevation": "Elevation",
-    "core.field.azimuth": "Direction",
-    "core.err.missing": "a value is missing",
-    "core.err.negativeSigma": "the uncertainty must be ≥ 0",
-    "core.err.minAboveMax": "the minimum is larger than the maximum",
-    "core.err.notPositive": "values must be > 0",
-    "core.err.mixedKinds": "Height and shadow must use the same error type",
-    "core.err.tilt": "The lean must be between 0° and 45°",
-    "core.err.belowHorizon": "The implied Sun elevation is not above the horizon",
-    "core.err.declination": "The declination is missing",
-    "core.err.noShadow": "Add at least one shadow",
-    "core.err.location": "The location is invalid",
-    "core.err.radius": "The location radius must be ≥ 0",
-    "core.err.yearsInteger": "Years must be whole numbers",
-    "core.err.yearsOrder": "The first year is after the last year",
-    "core.err.yearsRange": "Years must be within {min}–{max}",
-    "core.err.yearsSpan": "At most {max} years per search",
-    "core.err.months": "Select at least one month",
-    "core.err.offset": "invalid time gap",
-    "core.err.timeMissing": "the date and time are missing",
-    "core.err.timeTolerance": "invalid time tolerance",
-    "core.err.emptyArea": "The search area is empty",
-    "core.err.claimMissing": "Enter the claimed date and time",
-    "core.err.worker": "The computation stopped unexpectedly: {detail}",
-    "core.err.internal": "Internal error: {detail}",
-
-    // ---- Core: warnings
-    "core.warn.lowSun": "Low Sun (< 5°): refraction is large and variable; results are less reliable.",
-    "core.warn.wideElevation": "Elevation uncertainty exceeds 5°: expect very wide windows.",
-    "core.warn.highSun": "Sun above 80°: the shadow is short, so its direction is poorly defined.",
-    "core.warn.noYear": "The Sun's path repeats every year, so shadows alone cannot give the year: every year in the range is solved separately.",
-    "core.warn.noAzimuth": "No direction given: each day has a morning and an afternoon solution. Adding the shadow direction removes this ambiguity.",
-    "core.warn.noTime": "No time is compatible with the measurements and constraints. Check the inputs, the location or the tolerances.",
-    "core.warn.truncated": "Some solutions are cut by a constraint or by the search range; they may extend beyond what is shown.",
-    "core.warn.solstice": "A solution lies near a solstice, where the Sun's declination changes slowly: the date is poorly constrained there and the two yearly solutions can merge.",
-    "core.warn.inconsistent": "Even the best-fitting time lies outside the 95 % region: the measurements may be inconsistent (wrong north reference, tilted object, sloped ground?).",
-    "core.warn.coarse": "Result shown at {size}° resolution: the candidate area is too large to refine further. Narrow the search area or add shadows.",
-    "core.warn.noPlace": "No place on Earth matches all shadows at the given times. Check the times (UTC!), the north reference and the tolerances.",
-    "core.warn.ring": "A single shadow without direction only gives a ring of possible places. Add the shadow direction or a second shadow at another time.",
-
-    // ---- Error budget terms
-    "budget.lengths": "Height & shadow length",
-    "budget.ratio": "Height/shadow ratio",
-    "budget.angle": "Elevation reading",
-    "budget.tipEdge": "Shadow tip edge (penumbra)",
-    "budget.tipMidpoint": "Shadow tip midpoint judgement",
-    "budget.tilt": "Object lean",
-    "budget.refraction": "Refraction model",
-    "budget.azimuth": "Direction reading",
-
-    // ---- Field names and form validation
-    "field.height": "Object height",
-    "field.shadow": "Shadow length",
-    "field.ratio": "Height ÷ shadow",
-    "field.elevation": "Sun elevation",
-    "field.direction": "Direction",
-    "field.declination": "Declination",
-    "field.lean": "Max lean",
-    "field.pressure": "Air pressure",
-    "field.temperature": "Temperature",
-    "field.deltaT": "ΔT",
-    "field.radius": "Radius",
-    "field.siteHeight": "Height above sea level",
-    "field.yearFrom": "From year",
-    "field.yearTo": "To year",
-    "val.number": "{what}: enter a number",
-    "val.min": "{what} must be ≥ {min}",
-    "val.tolerance": "{what}: declare the tolerance (0 if exact)",
-    "val.toleranceTooBig": "{what}: the tolerance must be smaller than the value",
-    "val.locationBad": "Location not recognised",
-    "val.locationNeeded": "Enter the location (or pick it on a map)",
-    "val.offsetBad": "Offset not recognised (e.g. +02:00)",
-    "val.zoneBad": "Unknown time zone (e.g. Europe/Paris)",
-    "val.hhmm": "Use HH:MM",
-    "val.dateBad": "Date not recognised (e.g. 2024-06-01 or 2024-06-01 14:00)",
-    "val.gap": "Time after the first photo, e.g. +01:23:04 or 85 min",
-    "val.gapTolerance": "Declare the tolerance of the time gap, e.g. 2 s",
-    "val.todBoth": "Give both ends of the time-of-day window",
-    "val.dateTimeBad": "Date/time not recognised",
-    "val.whenTaken": "Enter when this photo was taken",
-    "val.timeTolerance": "Declare the time tolerance, e.g. 30 s or 2 min",
-    "val.bbox": "Use: south, west, north, east (e.g. 40, -5, 52, 10)",
-    "val.claimNeeded": "Enter the claimed time",
 
     // ---- Months and zones
     "month.0": "Jan",
@@ -244,21 +156,6 @@ export const STRINGS: StringTable = {
     "month.11": "Dec",
     "zone.utc": "UTC",
     "zone.solar": "Local mean solar time",
-
-    // ---- Examples
-    "ex.paris": "Two objects in one photo",
-    "ex.parisDesc": "Paris, 15 Apr 2025 09:20 UTC. A post and a lamp standard in the same picture; the EXIF clock says 11:20 with no offset.",
-    "ex.bollard": "Bollard",
-    "ex.lamp": "Lamp standard",
-    "ex.sydney": "Two photos, known time gap",
-    "ex.sydneyDesc": "Sydney, 10 Dec 2024 01:30 UTC, and a second photo 2 h 15 min later (from the EXIF difference). Near the solstice.",
-    "ex.post1": "Photo 1 – fence post",
-    "ex.post2": "Photo 2 – same post",
-    "ex.tromso": "No compass, high latitude",
-    "ex.tromsoDesc": "Tromsø, 20 Aug 2024 10:00 UTC. Only the ratio of a building's height to its shadow is known, with a tolerance.",
-    "ex.building": "Building",
-    "ex.athens": "Find the place: three photos",
-    "ex.athensDesc": "Athens, 2 Jun 2023 at 06:30, 09:45 and 14:10 UTC. Elevation only — the three rings cross at one place.",
 
     // ---- Place and search area
     "site.notSet": "Not set",

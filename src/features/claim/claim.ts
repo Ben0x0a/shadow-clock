@@ -4,16 +4,17 @@
  *
  * Defines: mountClaim() → the collapsible card (placed under the time answer by main.ts).
  * Used by: main.ts.
- * Depends on: core/claimCheck.ts, core/zone.ts, core/request.ts, core/models.ts,
- *             state/case.ts, state/solve.ts, ui/dom.ts, ui/format.ts, ui/context.ts.
+ * Depends on: api/operations.ts (checkClaim, shared with the command line), core/zone.ts,
+ *             core/request.ts, core/models.ts, state/case.ts, state/solve.ts, ui/dom.ts,
+ *             ui/format.ts, ui/context.ts.
  */
 
-import { checkClaim } from "../../core/claimCheck.ts";
+import { checkClaim } from "../../api/operations.ts";
 import type { ClaimOffsetResult, TimeSolveResult, Zone } from "../../core/models.ts";
 import { formatOffset } from "../../core/zone.ts";
 import { field, h, icon, info } from "../../ui/dom.ts";
 import { fmtDateTime, fmtSpan } from "../../ui/format.ts";
-import { buildClaimRequest, buildTimeRequest } from "../../core/request.ts";
+import { buildTimeRequest } from "../../core/request.ts";
 import { t, tm } from "../../ui/context.ts";
 import { at } from "../../core/util.ts";
 import type { CaseStore } from "../../state/case.ts";
@@ -86,17 +87,14 @@ function updateClaim(store: CaseStore, zone: Zone, lon: number, timeResult: Time
     output.replaceChildren();
     return;
   }
-  const b = buildClaimRequest(s);
-  if (!b.ok) {
-    output.replaceChildren(h("p", { class: "hint" }, tm(at(b.errors, 0).msg)));
-    return;
-  }
-  const r = checkClaim(b.req);
+  const r = checkClaim(s);
   if (!r.ok) {
-    output.replaceChildren(h("p", { class: "hint" }, tm(r.error)));
+    // The first message only: the panel has room for one hint; the fields show the rest.
+    const first = r.messages?.[0];
+    output.replaceChildren(h("p", { class: "hint" }, first ? tm(first) : r.message));
     return;
   }
-  const results = r.result.results;
+  const { request, results } = r.value;
   const [single] = results;
   if (single && results.length === 1) {
     const x = single;
@@ -119,7 +117,7 @@ function updateClaim(store: CaseStore, zone: Zone, lon: number, timeResult: Time
               ? `${signed(sf.residualElevation, 2)}, ${signed(sf.residualAzimuth, 1)}`
               : signed(sf.residualElevation, 2);
             return h("p", { class: "hint" }, t("claim.shotDetail", {
-              shot: at(b.req.shots, i).label,
+              shot: at(request.shots, i).label,
               el: sf.sunElevation.toFixed(2),
               az: sf.sunAzimuth.toFixed(1),
               residual,

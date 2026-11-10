@@ -4,7 +4,6 @@ window.__SWP_SITE__ = {
   "title": "ShadowClock",
   "lang": "en",
   "siteUrl": "https://shadow-clock.forandchips.com/",
-  "downloadName": "shadowclock.html",
   "netOrigins": {
     "https://tile.openstreetmap.org": {
       "directive": "img-src",
@@ -15,9 +14,12 @@ window.__SWP_SITE__ = {
   },
   "options": {},
   "mode": "site",
-  "version": "1e2bcc673e01",
-  "date": "2026-10-07",
+  "version": "b41eea5a313b",
+  "date": "2026-11-10",
   "assets": [],
+  "distribution": "single",
+  "download": "shadowclock.html",
+  "cli": "shadowclock-cli.js",
   "workers": [
     "solver"
   ],

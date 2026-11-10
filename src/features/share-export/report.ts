@@ -3,7 +3,8 @@
  *
  * Defines: exportReport(), printReport().
  * Used by: features/share-export/menu.ts.
- * Depends on: core/form.ts, core/config.ts, state/solve.ts (Solved), ui/context.ts (site, t).
+ * Depends on: api/results.ts (result shapes, shared with the command line), core/form.ts,
+ *             core/config.ts, state/solve.ts (Solved), ui/context.ts (site, t).
  *
  * HOW: the JSON report carries the application name and version, the method and its
  * parameters, the exact form inputs, the parsed request, the results, and a SHA-256
@@ -12,6 +13,7 @@
  * forensic traceability artefacts.
  */
 
+import { placeResults, timeResults } from "../../api/results.ts";
 import * as cfg from "../../core/config.ts";
 import type { AppState } from "../../core/form.ts";
 import type { Solved } from "../../state/solve.ts";
@@ -32,18 +34,7 @@ function stamp(d = new Date()): string {
 
 export async function exportReport(state: AppState, solved: Solved | null): Promise<void> {
   const inputs = JSON.stringify(state);
-  const results =
-    solved?.mode === "time"
-      ? {
-          // WHY drop `probability`: with declared bounds it is only a duration share, and a
-          // forensic report must not present it as a probability.
-          clusters: solved.res.clusters.map(({ probability: _p, ...c }) => c),
-          warnings: solved.res.warnings,
-          observations: solved.res.observations,
-        }
-      : solved?.mode === "place"
-        ? { regions: solved.res.regions.map(({ probability: _p, ...r }) => r), resolutionDeg: solved.res.resolutionDeg, cellCount: solved.res.cells.length, cells: solved.res.cells, warnings: solved.res.warnings, observations: solved.res.observations }
-        : null;
+  const results = solved?.mode === "time" ? timeResults(solved.res) : solved?.mode === "place" ? placeResults(solved.res) : null;
   const site = platform().site;
   const report = {
     application: { name: site.title, version: site.version, buildDate: site.date, edition: site.mode === "single" ? "offline copy" : "site", url: location.origin + location.pathname },

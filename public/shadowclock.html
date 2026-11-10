@@ -4457,7 +4457,6 @@ window.__SWP_SITE__ = {
   "title": "ShadowClock",
   "lang": "en",
   "siteUrl": "https://shadow-clock.forandchips.com/",
-  "downloadName": "shadowclock.html",
   "netOrigins": {
     "https://tile.openstreetmap.org": {
       "directive": "img-src",
@@ -4468,9 +4467,12 @@ window.__SWP_SITE__ = {
   },
   "options": {},
   "mode": "single",
-  "version": "1e2bcc673e01",
-  "date": "2026-10-07",
+  "version": "b41eea5a313b",
+  "date": "2026-11-10",
   "assets": [],
+  "distribution": "single",
+  "download": "shadowclock.html",
+  "cli": "shadowclock-cli.js",
   "workers": [
     "solver"
   ],
@@ -12140,11 +12142,11 @@ window.__SWP_SITE__ = {
             }
           },
           _setZoomTransform: function(level, center, zoom2) {
-            var scale2 = this._map.getZoomScale(zoom2, level.zoom), translate = level.origin.multiplyBy(scale2).subtract(this._map._getNewPixelOrigin(center, zoom2)).round();
+            var scale2 = this._map.getZoomScale(zoom2, level.zoom), translate2 = level.origin.multiplyBy(scale2).subtract(this._map._getNewPixelOrigin(center, zoom2)).round();
             if (Browser.any3d) {
-              setTransform(level.el, translate, scale2);
+              setTransform(level.el, translate2, scale2);
             } else {
-              setPosition(level.el, translate);
+              setPosition(level.el, translate2);
             }
           },
           _resetGrid: function() {
@@ -14090,6 +14092,9 @@ window.__SWP_SITE__ = {
     en: {
       download: "Download",
       downloadTitle: "Offline copy: a single HTML file",
+      downloadLocalTitle: "Offline copy: a zip with a local server (runs with Deno)",
+      downloadCli: "Command line",
+      downloadCliTitle: "Command-line version and library (runs with Deno)",
       install: "Install",
       installTitle: "Install the app (updates itself)",
       checkUpdate: "Check for updates",
@@ -14154,6 +14159,9 @@ window.__SWP_SITE__ = {
     fr: {
       download: "Télécharger",
       downloadTitle: "Copie hors ligne : un seul fichier HTML",
+      downloadLocalTitle: "Copie hors ligne : un zip avec un serveur local (s'exécute avec Deno)",
+      downloadCli: "Ligne de commande",
+      downloadCliTitle: "Version en ligne de commande et bibliothèque (s'exécute avec Deno)",
       install: "Installer",
       installTitle: "Installer l'application (se met à jour seule)",
       checkUpdate: "Vérifier les mises à jour",
@@ -14217,9 +14225,13 @@ window.__SWP_SITE__ = {
     }
   };
 
+  // node_modules/static-web-platform/src/core/types.ts
+  var servesFiles = (mode) => mode === "site" || mode === "local";
+  var isLocalCopy = (mode) => mode === "single" || mode === "local";
+
   // node_modules/static-web-platform/src/services/assets.ts
   function createAssets(site) {
-    const available = site.mode === "site";
+    const available = servesFiles(site.mode);
     const check = (path) => {
       if (!site.assets.includes(path)) throw new Error(`Undeclared asset: ${path} (site.json "assets")`);
     };
@@ -14450,7 +14462,7 @@ window.__SWP_SITE__ = {
   // node_modules/static-web-platform/src/services/workers.ts
   function startWorker(site, name) {
     if (!site.workers.includes(name)) throw new Error(`Undeclared worker: ${name} (site.json "workers")`);
-    if (site.mode === "site") return new Worker(`workers/${name}.js`);
+    if (servesFiles(site.mode)) return new Worker(`workers/${name}.js`);
     const source = document.getElementById(`swp-worker-${name}`)?.textContent;
     if (!source) throw new Error(`Worker ${name} missing from the single file`);
     return new Worker(URL.createObjectURL(new Blob([source], { type: "text/javascript" })));
@@ -14555,15 +14567,28 @@ window.__SWP_SITE__ = {
       install.onInstalled(() => {
         installButton.hidden = true;
       });
-      const download = el("a", {
-        id: "download",
-        className: "button",
-        href: site.downloadName,
-        download: site.downloadName,
-        textContent: `⬇ ${t2("download")}`,
-        title: t2("downloadTitle")
-      });
-      slot.append(installButton, download, privacy, accessibility, status);
+      slot.append(installButton);
+      if (site.download) {
+        slot.append(el("a", {
+          id: "download",
+          className: "button",
+          href: site.download,
+          download: site.download,
+          textContent: `⬇ ${t2("download")}`,
+          title: t2(site.distribution === "local-server" ? "downloadLocalTitle" : "downloadTitle")
+        }));
+      }
+      if (site.cli) {
+        slot.append(el("a", {
+          id: "download-cli",
+          className: "button",
+          href: site.cli,
+          download: site.cli,
+          textContent: `⬇ ${t2("downloadCli")}`,
+          title: t2("downloadCliTitle")
+        }));
+      }
+      slot.append(privacy, accessibility, status);
       return { setStatus };
     }
     slot.append(privacy, accessibility, status);
@@ -14583,7 +14608,7 @@ window.__SWP_SITE__ = {
             `${t2("updateAvailable")} (${displayDate(result.info.date)}) — `,
             // download: honoured only for same-origin links (not from file://);
             // the server's Content-Disposition: attachment does the real work.
-            el("a", { href: result.downloadUrl, download: site.downloadName, textContent: t2("updateDownload") })
+            el("a", { href: result.downloadUrl, download: site.download ?? "", textContent: t2("updateDownload") })
           );
           setStatus(wrap, true);
         } else if (result.kind === "failed") {
@@ -14901,7 +14926,7 @@ window.__SWP_SITE__ = {
     if (options.strings) i18n.add(options.strings);
     const store = createStore(site.id, () => localStorage);
     const sessionStore = createStore(site.id, () => sessionStorage);
-    const declared = () => site.mode === "single" && site.siteUrl ? { ...site.netOrigins, [new URL(site.siteUrl).origin]: { directive: "connect-src", purpose: i18n.t("purposeUpdate") } } : { ...site.netOrigins };
+    const declared = () => isLocalCopy(site.mode) && site.siteUrl ? { ...site.netOrigins, [new URL(site.siteUrl).origin]: { directive: "connect-src", purpose: i18n.t("purposeUpdate") } } : { ...site.netOrigins };
     let consent2 = null;
     applyStoredTheme(store);
     const shortcuts = createShortcuts(store);
@@ -14927,7 +14952,7 @@ window.__SWP_SITE__ = {
     if (site.mode === "site") registerServiceWorker();
     keepFocusVisibleUnderStickyHeaders();
     window.__swpT = i18n.t;
-    const shareBase = site.mode === "single" && site.siteUrl ? site.siteUrl : location.href;
+    const shareBase = isLocalCopy(site.mode) && site.siteUrl ? site.siteUrl : location.href;
     const share = {
       incoming,
       offer: (payload, items) => dialogs.confirmShare(shareLink(shareBase, payload), items)
@@ -15542,15 +15567,15 @@ window.__SWP_SITE__ = {
     solve() {
       clearTimeout(this.timer);
       const s = this.cases.state;
-      const built = s.mode === "time" ? buildTimeRequest(s) : buildPlaceRequest(s);
-      this.invalid = new Set(built.ok ? [] : built.errors.map((e) => e.key));
-      if (!built.ok) {
+      const built2 = s.mode === "time" ? buildTimeRequest(s) : buildPlaceRequest(s);
+      this.invalid = new Set(built2.ok ? [] : built2.errors.map((e) => e.key));
+      if (!built2.ok) {
         this.solved = null;
-        this.publish({ kind: "invalid", errors: built.errors });
+        this.publish({ kind: "invalid", errors: built2.errors });
         return;
       }
       this.publish({ kind: "running", fraction: 0, phase: null });
-      const req = built.req;
+      const req = built2.req;
       const job = s.mode === "time" ? { kind: "time", req } : { kind: "place", req };
       this.jobs.run(job, {
         progress: (fraction, phase) => this.publish({ kind: "running", fraction, phase }),
@@ -15593,9 +15618,127 @@ window.__SWP_SITE__ = {
     }
   };
 
+  // src/api/messages.ts
+  var MESSAGES = {
+    "msg.forShadow": "{shot}: {text}",
+    "shot.default": "Shadow {n}",
+    "shot.object": "Object {n}",
+    "shot.photo": "Photo {n}",
+    // ---- Core: errors
+    "core.err.field": "{field}: {reason}",
+    "core.field.heightShadow": "Height/shadow",
+    "core.field.ratio": "Ratio",
+    "core.field.elevation": "Elevation",
+    "core.field.azimuth": "Direction",
+    "core.err.missing": "a value is missing",
+    "core.err.negativeSigma": "the uncertainty must be ≥ 0",
+    "core.err.minAboveMax": "the minimum is larger than the maximum",
+    "core.err.notPositive": "values must be > 0",
+    "core.err.mixedKinds": "Height and shadow must use the same error type",
+    "core.err.tilt": "The lean must be between 0° and 45°",
+    "core.err.belowHorizon": "The implied Sun elevation is not above the horizon",
+    "core.err.declination": "The declination is missing",
+    "core.err.noShadow": "Add at least one shadow",
+    "core.err.location": "The location is invalid",
+    "core.err.radius": "The location radius must be ≥ 0",
+    "core.err.yearsInteger": "Years must be whole numbers",
+    "core.err.yearsOrder": "The first year is after the last year",
+    "core.err.yearsRange": "Years must be within {min}–{max}",
+    "core.err.yearsSpan": "At most {max} years per search",
+    "core.err.months": "Select at least one month",
+    "core.err.offset": "invalid time gap",
+    "core.err.timeMissing": "the date and time are missing",
+    "core.err.timeTolerance": "invalid time tolerance",
+    "core.err.emptyArea": "The search area is empty",
+    "core.err.claimMissing": "Enter the claimed date and time",
+    "core.err.worker": "The computation stopped unexpectedly: {detail}",
+    "core.err.internal": "Internal error: {detail}",
+    // ---- Core: warnings
+    "core.warn.lowSun": "Low Sun (< 5°): refraction is large and variable; results are less reliable.",
+    "core.warn.wideElevation": "Elevation uncertainty exceeds 5°: expect very wide windows.",
+    "core.warn.highSun": "Sun above 80°: the shadow is short, so its direction is poorly defined.",
+    "core.warn.noYear": "The Sun's path repeats every year, so shadows alone cannot give the year: every year in the range is solved separately.",
+    "core.warn.noAzimuth": "No direction given: each day has a morning and an afternoon solution. Adding the shadow direction removes this ambiguity.",
+    "core.warn.noTime": "No time is compatible with the measurements and constraints. Check the inputs, the location or the tolerances.",
+    "core.warn.truncated": "Some solutions are cut by a constraint or by the search range; they may extend beyond what is shown.",
+    "core.warn.solstice": "A solution lies near a solstice, where the Sun's declination changes slowly: the date is poorly constrained there and the two yearly solutions can merge.",
+    "core.warn.inconsistent": "Even the best-fitting time lies outside the 95 % region: the measurements may be inconsistent (wrong north reference, tilted object, sloped ground?).",
+    "core.warn.coarse": "Result shown at {size}° resolution: the candidate area is too large to refine further. Narrow the search area or add shadows.",
+    "core.warn.noPlace": "No place on Earth matches all shadows at the given times. Check the times (UTC!), the north reference and the tolerances.",
+    "core.warn.ring": "A single shadow without direction only gives a ring of possible places. Add the shadow direction or a second shadow at another time.",
+    // ---- Error budget terms
+    "budget.lengths": "Height & shadow length",
+    "budget.ratio": "Height/shadow ratio",
+    "budget.angle": "Elevation reading",
+    "budget.tipEdge": "Shadow tip edge (penumbra)",
+    "budget.tipMidpoint": "Shadow tip midpoint judgement",
+    "budget.tilt": "Object lean",
+    "budget.refraction": "Refraction model",
+    "budget.azimuth": "Direction reading",
+    // ---- Field names and form validation
+    "field.height": "Object height",
+    "field.shadow": "Shadow length",
+    "field.ratio": "Height ÷ shadow",
+    "field.elevation": "Sun elevation",
+    "field.direction": "Direction",
+    "field.declination": "Declination",
+    "field.lean": "Max lean",
+    "field.pressure": "Air pressure",
+    "field.temperature": "Temperature",
+    "field.deltaT": "ΔT",
+    "field.radius": "Radius",
+    "field.siteHeight": "Height above sea level",
+    "field.yearFrom": "From year",
+    "field.yearTo": "To year",
+    "val.number": "{what}: enter a number",
+    "val.min": "{what} must be ≥ {min}",
+    "val.tolerance": "{what}: declare the tolerance (0 if exact)",
+    "val.toleranceTooBig": "{what}: the tolerance must be smaller than the value",
+    "val.locationBad": "Location not recognised",
+    "val.locationNeeded": "Enter the location (or pick it on a map)",
+    "val.offsetBad": "Offset not recognised (e.g. +02:00)",
+    "val.zoneBad": "Unknown time zone (e.g. Europe/Paris)",
+    "val.hhmm": "Use HH:MM",
+    "val.dateBad": "Date not recognised (e.g. 2024-06-01 or 2024-06-01 14:00)",
+    "val.gap": "Time after the first photo, e.g. +01:23:04 or 85 min",
+    "val.gapTolerance": "Declare the tolerance of the time gap, e.g. 2 s",
+    "val.todBoth": "Give both ends of the time-of-day window",
+    "val.dateTimeBad": "Date/time not recognised",
+    "val.whenTaken": "Enter when this photo was taken",
+    "val.timeTolerance": "Declare the time tolerance, e.g. 30 s or 2 min",
+    "val.bbox": "Use: south, west, north, east (e.g. 40, -5, 52, 10)",
+    "val.claimNeeded": "Enter the claimed time",
+    // ---- Examples
+    "ex.paris": "Two objects in one photo",
+    "ex.parisDesc": "Paris, 15 Apr 2025 09:20 UTC. A post and a lamp standard in the same picture; the EXIF clock says 11:20 with no offset.",
+    "ex.bollard": "Bollard",
+    "ex.lamp": "Lamp standard",
+    "ex.sydney": "Two photos, known time gap",
+    "ex.sydneyDesc": "Sydney, 10 Dec 2024 01:30 UTC, and a second photo 2 h 15 min later (from the EXIF difference). Near the solstice.",
+    "ex.post1": "Photo 1 – fence post",
+    "ex.post2": "Photo 2 – same post",
+    "ex.tromso": "No compass, high latitude",
+    "ex.tromsoDesc": "Tromsø, 20 Aug 2024 10:00 UTC. Only the ratio of a building's height to its shadow is known, with a tolerance.",
+    "ex.building": "Building",
+    "ex.athens": "Find the place: three photos",
+    "ex.athensDesc": "Athens, 2 Jun 2023 at 06:30, 09:45 and 14:10 UTC. Elevation only — the three rings cross at one place."
+  };
+  function translate(key, vars = {}) {
+    const text = MESSAGES[key];
+    if (text === void 0) throw new Error(`Missing message: ${key}`);
+    return text.replace(/\{(\w+)\}/g, (all, name) => name in vars ? String(vars[name]) : all);
+  }
+  function formatMessage(m) {
+    const vars = {};
+    for (const [k, v] of Object.entries(m.vars ?? {})) vars[k] = typeof v === "object" ? formatMessage(v) : v;
+    const text = translate(m.key, vars);
+    return m.shot ? translate("msg.forShadow", { shot: m.shot, text }) : text;
+  }
+
   // src/strings.ts
   var STRINGS = {
     en: {
+      ...MESSAGES,
       // ---- App shell
       "app.tagline": "Time & place from shadows",
       "app.skip": "Skip to content",
@@ -15613,7 +15756,6 @@ window.__SWP_SITE__ = {
       "app.findPlace": "Find the place",
       "app.findPlaceTitle": "Known times → where was it taken?",
       "app.settings": "Settings",
-      "msg.forShadow": "{shot}: {text}",
       // ---- Expert-view panel titles
       "panel.where": "Where was it taken?",
       "panel.shadows": "Shadows",
@@ -15712,94 +15854,7 @@ window.__SWP_SITE__ = {
       "info.more": "More about {title}",
       "info.title": "More information",
       "info.ok": "Got it",
-      "shot.default": "Shadow {n}",
-      "shot.object": "Object {n}",
-      "shot.photo": "Photo {n}",
       "shot.copyOf": "{label} (copy)",
-      // ---- Core: errors
-      "core.err.field": "{field}: {reason}",
-      "core.field.heightShadow": "Height/shadow",
-      "core.field.ratio": "Ratio",
-      "core.field.elevation": "Elevation",
-      "core.field.azimuth": "Direction",
-      "core.err.missing": "a value is missing",
-      "core.err.negativeSigma": "the uncertainty must be ≥ 0",
-      "core.err.minAboveMax": "the minimum is larger than the maximum",
-      "core.err.notPositive": "values must be > 0",
-      "core.err.mixedKinds": "Height and shadow must use the same error type",
-      "core.err.tilt": "The lean must be between 0° and 45°",
-      "core.err.belowHorizon": "The implied Sun elevation is not above the horizon",
-      "core.err.declination": "The declination is missing",
-      "core.err.noShadow": "Add at least one shadow",
-      "core.err.location": "The location is invalid",
-      "core.err.radius": "The location radius must be ≥ 0",
-      "core.err.yearsInteger": "Years must be whole numbers",
-      "core.err.yearsOrder": "The first year is after the last year",
-      "core.err.yearsRange": "Years must be within {min}–{max}",
-      "core.err.yearsSpan": "At most {max} years per search",
-      "core.err.months": "Select at least one month",
-      "core.err.offset": "invalid time gap",
-      "core.err.timeMissing": "the date and time are missing",
-      "core.err.timeTolerance": "invalid time tolerance",
-      "core.err.emptyArea": "The search area is empty",
-      "core.err.claimMissing": "Enter the claimed date and time",
-      "core.err.worker": "The computation stopped unexpectedly: {detail}",
-      "core.err.internal": "Internal error: {detail}",
-      // ---- Core: warnings
-      "core.warn.lowSun": "Low Sun (< 5°): refraction is large and variable; results are less reliable.",
-      "core.warn.wideElevation": "Elevation uncertainty exceeds 5°: expect very wide windows.",
-      "core.warn.highSun": "Sun above 80°: the shadow is short, so its direction is poorly defined.",
-      "core.warn.noYear": "The Sun's path repeats every year, so shadows alone cannot give the year: every year in the range is solved separately.",
-      "core.warn.noAzimuth": "No direction given: each day has a morning and an afternoon solution. Adding the shadow direction removes this ambiguity.",
-      "core.warn.noTime": "No time is compatible with the measurements and constraints. Check the inputs, the location or the tolerances.",
-      "core.warn.truncated": "Some solutions are cut by a constraint or by the search range; they may extend beyond what is shown.",
-      "core.warn.solstice": "A solution lies near a solstice, where the Sun's declination changes slowly: the date is poorly constrained there and the two yearly solutions can merge.",
-      "core.warn.inconsistent": "Even the best-fitting time lies outside the 95 % region: the measurements may be inconsistent (wrong north reference, tilted object, sloped ground?).",
-      "core.warn.coarse": "Result shown at {size}° resolution: the candidate area is too large to refine further. Narrow the search area or add shadows.",
-      "core.warn.noPlace": "No place on Earth matches all shadows at the given times. Check the times (UTC!), the north reference and the tolerances.",
-      "core.warn.ring": "A single shadow without direction only gives a ring of possible places. Add the shadow direction or a second shadow at another time.",
-      // ---- Error budget terms
-      "budget.lengths": "Height & shadow length",
-      "budget.ratio": "Height/shadow ratio",
-      "budget.angle": "Elevation reading",
-      "budget.tipEdge": "Shadow tip edge (penumbra)",
-      "budget.tipMidpoint": "Shadow tip midpoint judgement",
-      "budget.tilt": "Object lean",
-      "budget.refraction": "Refraction model",
-      "budget.azimuth": "Direction reading",
-      // ---- Field names and form validation
-      "field.height": "Object height",
-      "field.shadow": "Shadow length",
-      "field.ratio": "Height ÷ shadow",
-      "field.elevation": "Sun elevation",
-      "field.direction": "Direction",
-      "field.declination": "Declination",
-      "field.lean": "Max lean",
-      "field.pressure": "Air pressure",
-      "field.temperature": "Temperature",
-      "field.deltaT": "ΔT",
-      "field.radius": "Radius",
-      "field.siteHeight": "Height above sea level",
-      "field.yearFrom": "From year",
-      "field.yearTo": "To year",
-      "val.number": "{what}: enter a number",
-      "val.min": "{what} must be ≥ {min}",
-      "val.tolerance": "{what}: declare the tolerance (0 if exact)",
-      "val.toleranceTooBig": "{what}: the tolerance must be smaller than the value",
-      "val.locationBad": "Location not recognised",
-      "val.locationNeeded": "Enter the location (or pick it on a map)",
-      "val.offsetBad": "Offset not recognised (e.g. +02:00)",
-      "val.zoneBad": "Unknown time zone (e.g. Europe/Paris)",
-      "val.hhmm": "Use HH:MM",
-      "val.dateBad": "Date not recognised (e.g. 2024-06-01 or 2024-06-01 14:00)",
-      "val.gap": "Time after the first photo, e.g. +01:23:04 or 85 min",
-      "val.gapTolerance": "Declare the tolerance of the time gap, e.g. 2 s",
-      "val.todBoth": "Give both ends of the time-of-day window",
-      "val.dateTimeBad": "Date/time not recognised",
-      "val.whenTaken": "Enter when this photo was taken",
-      "val.timeTolerance": "Declare the time tolerance, e.g. 30 s or 2 min",
-      "val.bbox": "Use: south, west, north, east (e.g. 40, -5, 52, 10)",
-      "val.claimNeeded": "Enter the claimed time",
       // ---- Months and zones
       "month.0": "Jan",
       "month.1": "Feb",
@@ -15815,20 +15870,6 @@ window.__SWP_SITE__ = {
       "month.11": "Dec",
       "zone.utc": "UTC",
       "zone.solar": "Local mean solar time",
-      // ---- Examples
-      "ex.paris": "Two objects in one photo",
-      "ex.parisDesc": "Paris, 15 Apr 2025 09:20 UTC. A post and a lamp standard in the same picture; the EXIF clock says 11:20 with no offset.",
-      "ex.bollard": "Bollard",
-      "ex.lamp": "Lamp standard",
-      "ex.sydney": "Two photos, known time gap",
-      "ex.sydneyDesc": "Sydney, 10 Dec 2024 01:30 UTC, and a second photo 2 h 15 min later (from the EXIF difference). Near the solstice.",
-      "ex.post1": "Photo 1 – fence post",
-      "ex.post2": "Photo 2 – same post",
-      "ex.tromso": "No compass, high latitude",
-      "ex.tromsoDesc": "Tromsø, 20 Aug 2024 10:00 UTC. Only the ratio of a building's height to its shadow is known, with a tolerance.",
-      "ex.building": "Building",
-      "ex.athens": "Find the place: three photos",
-      "ex.athensDesc": "Athens, 2 Jun 2023 at 06:30, 09:45 and 14:10 UTC. Elevation only — the three rings cross at one place.",
       // ---- Place and search area
       "site.notSet": "Not set",
       "site.within": "within {r} {unit}",
@@ -17227,262 +17268,6 @@ window.__SWP_SITE__ = {
     return { ok: true, result: { results } };
   }
 
-  // src/ui/format.ts
-  function monthName(i) {
-    return t(`month.${i}`);
-  }
-  function zoneLabel(zone) {
-    switch (zone.kind) {
-      case "utc":
-        return t("zone.utc");
-      case "offset":
-        return `UTC${formatOffset(zone.minutes)}`;
-      case "solar":
-        return t("zone.solar");
-      case "iana":
-        return zone.name;
-    }
-  }
-  var pad = (n, w = 2) => String(n).padStart(w, "0");
-  function wall(ms, zone, lon) {
-    const off = zoneOffsetMin(zone, ms, lon);
-    return { d: new Date(ms + off * 6e4), off };
-  }
-  function fmtDateTime(ms, zone, lon, seconds = true) {
-    const { d, off } = wall(ms, zone, lon);
-    const t2 = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}${seconds ? `:${pad(d.getUTCSeconds())}` : ""}`;
-    return zone.kind === "utc" ? `${t2} UTC` : `${t2} (UTC${formatOffset(off)})`;
-  }
-  function fmtDate(ms, zone, lon, year = true) {
-    const { d } = wall(ms, zone, lon);
-    return `${d.getUTCDate()} ${monthName(d.getUTCMonth())}${year ? ` ${d.getUTCFullYear()}` : ""}`;
-  }
-  function fmtTime(ms, zone, lon, seconds = false) {
-    const { d } = wall(ms, zone, lon);
-    return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}${seconds ? `:${pad(d.getUTCSeconds())}` : ""}`;
-  }
-  function fmtSpan(ms) {
-    const s = Math.round(Math.abs(ms) / 1e3);
-    const u = (n, unit) => `${n} ${t(`unit.${unit}`)}`;
-    if (s < 60) return u(s, "s");
-    if (s < 3600) return `${u(Math.floor(s / 60), "min")}${s % 60 ? ` ${u(pad(s % 60), "s")}` : ""}`;
-    if (s < 86400 * 2) return `${u(Math.floor(s / 3600), "h")} ${u(pad(Math.floor(s % 3600 / 60)), "min")}`;
-    return u(Math.round(s / 86400), "d");
-  }
-  function formatDuration(sec, signed = false) {
-    const sign = sec < 0 ? "−" : signed ? "+" : "";
-    let s = Math.round(Math.abs(sec));
-    const d = Math.floor(s / 86400);
-    s -= d * 86400;
-    const h2 = Math.floor(s / 3600);
-    s -= h2 * 3600;
-    const m = Math.floor(s / 60);
-    s -= m * 60;
-    const parts = [];
-    if (d) parts.push(`${d} ${t("unit.d")}`);
-    if (h2) parts.push(`${h2} ${t("unit.h")}`);
-    if (m) parts.push(`${m} ${t("unit.min")}`);
-    if (s || parts.length === 0) parts.push(`${s} ${t("unit.s")}`);
-    return sign + parts.join(" ");
-  }
-  function fmtLatLon(lat, lon, digits = 5) {
-    return `${lat.toFixed(digits)}, ${lon.toFixed(digits)}`;
-  }
-  function fmtSolar(hours) {
-    const m = Math.round(hours * 60) % 1440;
-    return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
-  }
-
-  // src/features/claim/claim.ts
-  var output = null;
-  function renderClaim(root, store, invalid, onChange) {
-    const s = store.state;
-    output = h("div", { class: "claim-out", "aria-live": "polite" });
-    root.replaceChildren(
-      h(
-        "div",
-        { class: "row" },
-        field({
-          label: t("claim.time"),
-          info: t("claim.timeInfo"),
-          value: s.claim.time,
-          name: "claim.time",
-          invalid: invalid.has("claim.time"),
-          inputmode: "text",
-          wide: true,
-          placeholder: "2024:07:14 15:32:10",
-          onInput: (v) => {
-            store.update((st) => st.claim.time = v);
-            onChange();
-          }
-        }),
-        field({
-          label: t("cons.zoneOffset"),
-          value: s.claim.offset,
-          name: "claim.offset",
-          invalid: invalid.has("claim.offset"),
-          inputmode: "text",
-          placeholder: t("claim.offsetPlaceholder"),
-          info: t("claim.offsetInfo"),
-          onInput: (v) => {
-            store.update((st) => st.claim.offset = v);
-            onChange();
-          }
-        })
-      ),
-      output
-    );
-  }
-  function levelText(r2) {
-    if (r2.acceptedLevel === null) return t("claim.outside");
-    if (r2.acceptedLevel === 1) return t("claim.insideBounds");
-    return t("claim.insideLevel", { pct: (r2.acceptedLevel * 100).toFixed(r2.acceptedLevel > 0.99 ? 1 : 0) });
-  }
-  function nearest(ms, res) {
-    if (!res) return null;
-    let out = null;
-    for (const c of res.clusters) {
-      for (const w of c.windows) {
-        const d = ms < w.startMs ? w.startMs - ms : ms > w.endMs ? ms - w.endMs : 0;
-        if (!out || d < out.dist) out = { dist: d, best: w.bestMs };
-      }
-    }
-    return out;
-  }
-  function updateClaim(store, zone, lon, timeResult) {
-    if (!output) return;
-    const s = store.state;
-    if (!s.claim.time.trim()) {
-      output.replaceChildren();
-      return;
-    }
-    const b = buildClaimRequest(s);
-    if (!b.ok) {
-      output.replaceChildren(h("p", { class: "hint" }, tm(at(b.errors, 0).msg)));
-      return;
-    }
-    const r2 = checkClaim(b.req);
-    if (!r2.ok) {
-      output.replaceChildren(h("p", { class: "hint" }, tm(r2.error)));
-      return;
-    }
-    const results = r2.result.results;
-    const [single] = results;
-    if (single && results.length === 1) {
-      const x = single;
-      const ok2 = x.acceptedLevel !== null;
-      const n = nearest(x.utcMs, timeResult);
-      output.replaceChildren(
-        h(
-          "div",
-          { class: `verdict ${ok2 ? "good" : "bad"}` },
-          icon(ok2 ? "check" : "warn", 20),
-          h(
-            "div",
-            null,
-            h("strong", null, t(ok2 ? "claim.consistent" : "claim.inconsistent")),
-            h("p", null, t("claim.levelSentence", { time: fmtDateTime(x.utcMs, { kind: "utc" }, 0), level: levelText(x) })),
-            !ok2 && n ? h("p", null, t("claim.nearest", { time: fmtDateTime(n.best, zone, lon), dist: fmtSpan(n.dist) })) : null,
-            ...x.fit.shots.map((sf, i) => {
-              const signed = (v, d) => `${v >= 0 ? "+" : ""}${v.toFixed(d)}°`;
-              const residual = sf.residualAzimuth !== null ? `${signed(sf.residualElevation, 2)}, ${signed(sf.residualAzimuth, 1)}` : signed(sf.residualElevation, 2);
-              return h("p", { class: "hint" }, t("claim.shotDetail", {
-                shot: at(b.req.shots, i).label,
-                el: sf.sunElevation.toFixed(2),
-                az: sf.sunAzimuth.toFixed(1),
-                residual
-              }));
-            })
-          )
-        )
-      );
-      return;
-    }
-    const ok = results.filter((x) => x.acceptedLevel !== null);
-    const best = ok.length ? ok.reduce((a, x) => x.fit.misfit < a.fit.misfit ? x : a) : null;
-    const strip = h(
-      "div",
-      { class: "offset-strip", role: "img", "aria-label": t("claim.stripLabel", { list: ok.map((x) => formatOffset(x.offsetMin)).join(", ") || t("claim.none") }) },
-      results.map(
-        (x) => h("span", {
-          class: `cell lv-${x.acceptedLevel === null ? "out" : x.acceptedLevel >= 0.99 ? "3" : x.acceptedLevel >= 0.95 ? "2" : "1"}`,
-          title: `UTC${formatOffset(x.offsetMin)}: ${levelText(x)}`
-        })
-      )
-    );
-    const ticks = h(
-      "div",
-      { class: "offset-ticks", "aria-hidden": "true" },
-      [-12, -6, 0, 6, 12].map((v) => h("span", { style: { left: `${(v + 12) / 26 * 100}%` } }, v > 0 ? `+${v}` : v < 0 ? `−${-v}` : "0"))
-    );
-    output.replaceChildren(
-      h(
-        "div",
-        { class: `verdict ${ok.length ? "good" : "bad"}` },
-        icon(ok.length ? "check" : "warn", 20),
-        h(
-          "div",
-          null,
-          h("strong", null, best ? t("claim.compatibleIf", { offset: formatOffset(best.offsetMin) }) : t("claim.noOffset")),
-          h(
-            "div",
-            { class: "label-row" },
-            h("p", null, ok.length ? t("claim.compatibleList", { list: ranges(ok.map((x) => x.offsetMin)) }) : t("claim.wrong")),
-            info(t("claim.readingTitle"), t(ok.length ? "claim.readingOk" : "claim.readingNone"))
-          )
-        )
-      ),
-      strip,
-      ticks
-    );
-  }
-  function ranges(mins) {
-    const out = [];
-    let a = at(mins, 0);
-    let prev = a;
-    for (const m of [...mins.slice(1), Infinity]) {
-      if (m - prev <= 15) {
-        prev = m;
-        continue;
-      }
-      out.push(a === prev ? `UTC${formatOffset(a)}` : t("claim.range", { from: formatOffset(a), to: formatOffset(prev) }));
-      a = m;
-      prev = m;
-    }
-    return out.join(", ");
-  }
-  function mountClaim(cases2, session2) {
-    const body = h("div");
-    const card = h(
-      "details",
-      { class: "card result claim-card" },
-      h("summary", null, h("span", null, h("strong", null, t("claim.title")), h("small", null, t("claim.subtitle")))),
-      body
-    );
-    let timer2 = 0;
-    const schedule = () => {
-      clearTimeout(timer2);
-      timer2 = window.setTimeout(() => {
-        if (cases2.state.mode !== "time") return;
-        const b = buildTimeRequest(cases2.state);
-        const zone = b.ok ? b.req.constraints.zone : { kind: "utc" };
-        const lon = b.ok ? b.req.site.lon : 0;
-        updateClaim(cases2, zone, lon, session2.solved?.mode === "time" ? session2.solved.res : null);
-      }, 250);
-    };
-    const render = () => {
-      renderClaim(body, cases2, session2.invalid, schedule);
-      if (cases2.state.claim.time.trim()) card.open = true;
-    };
-    cases2.subscribe((_s, structural) => {
-      if (structural) render();
-      schedule();
-    });
-    session2.subscribe((st) => st.kind === "done" && schedule());
-    render();
-    return card;
-  }
-
   // src/core/examples.ts
   var ATM = { pressureHpa: 1010, temperatureC: 10, refraction: true };
   function sunAt(ms, lat, lon) {
@@ -17593,6 +17378,295 @@ window.__SWP_SITE__ = {
     }
   ];
 
+  // src/core/solveLocation.ts
+  var KM_PER_DEG = Math.PI / 180 * (EARTH_RADIUS_M / 1e3);
+
+  // src/api/results.ts
+  function timeResults(res) {
+    return {
+      clusters: res.clusters.map(({ probability: _p, ...c }) => c),
+      warnings: res.warnings,
+      observations: res.observations
+    };
+  }
+  function placeResults(res) {
+    return {
+      regions: res.regions.map(({ probability: _p, ...r2 }) => r2),
+      resolutionDeg: res.resolutionDeg,
+      cellCount: res.cells.length,
+      cells: res.cells,
+      warnings: res.warnings,
+      observations: res.observations
+    };
+  }
+
+  // src/api/operations.ts
+  function invalid(messages) {
+    return { ok: false, code: "invalid-case", message: messages.map(formatMessage).join("\n"), messages };
+  }
+  function built(b) {
+    return b.ok ? { ok: true, value: b.req } : invalid(b.errors.map((e) => e.msg));
+  }
+  function checkClaim2(state) {
+    const req = built(buildClaimRequest(state));
+    if (!req.ok) return req;
+    const r2 = checkClaim(req.value);
+    return r2.ok ? { ok: true, value: { request: req.value, results: r2.result.results } } : invalid([r2.error]);
+  }
+  var EXAMPLE_NAMES = EXAMPLES.map((e) => e.label.replace(/^ex\./, ""));
+
+  // src/ui/format.ts
+  function monthName(i) {
+    return t(`month.${i}`);
+  }
+  function zoneLabel(zone) {
+    switch (zone.kind) {
+      case "utc":
+        return t("zone.utc");
+      case "offset":
+        return `UTC${formatOffset(zone.minutes)}`;
+      case "solar":
+        return t("zone.solar");
+      case "iana":
+        return zone.name;
+    }
+  }
+  var pad = (n, w = 2) => String(n).padStart(w, "0");
+  function wall(ms, zone, lon) {
+    const off = zoneOffsetMin(zone, ms, lon);
+    return { d: new Date(ms + off * 6e4), off };
+  }
+  function fmtDateTime(ms, zone, lon, seconds = true) {
+    const { d, off } = wall(ms, zone, lon);
+    const t2 = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}${seconds ? `:${pad(d.getUTCSeconds())}` : ""}`;
+    return zone.kind === "utc" ? `${t2} UTC` : `${t2} (UTC${formatOffset(off)})`;
+  }
+  function fmtDate(ms, zone, lon, year = true) {
+    const { d } = wall(ms, zone, lon);
+    return `${d.getUTCDate()} ${monthName(d.getUTCMonth())}${year ? ` ${d.getUTCFullYear()}` : ""}`;
+  }
+  function fmtTime(ms, zone, lon, seconds = false) {
+    const { d } = wall(ms, zone, lon);
+    return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}${seconds ? `:${pad(d.getUTCSeconds())}` : ""}`;
+  }
+  function fmtSpan(ms) {
+    const s = Math.round(Math.abs(ms) / 1e3);
+    const u = (n, unit) => `${n} ${t(`unit.${unit}`)}`;
+    if (s < 60) return u(s, "s");
+    if (s < 3600) return `${u(Math.floor(s / 60), "min")}${s % 60 ? ` ${u(pad(s % 60), "s")}` : ""}`;
+    if (s < 86400 * 2) return `${u(Math.floor(s / 3600), "h")} ${u(pad(Math.floor(s % 3600 / 60)), "min")}`;
+    return u(Math.round(s / 86400), "d");
+  }
+  function formatDuration(sec, signed = false) {
+    const sign = sec < 0 ? "−" : signed ? "+" : "";
+    let s = Math.round(Math.abs(sec));
+    const d = Math.floor(s / 86400);
+    s -= d * 86400;
+    const h2 = Math.floor(s / 3600);
+    s -= h2 * 3600;
+    const m = Math.floor(s / 60);
+    s -= m * 60;
+    const parts = [];
+    if (d) parts.push(`${d} ${t("unit.d")}`);
+    if (h2) parts.push(`${h2} ${t("unit.h")}`);
+    if (m) parts.push(`${m} ${t("unit.min")}`);
+    if (s || parts.length === 0) parts.push(`${s} ${t("unit.s")}`);
+    return sign + parts.join(" ");
+  }
+  function fmtLatLon(lat, lon, digits = 5) {
+    return `${lat.toFixed(digits)}, ${lon.toFixed(digits)}`;
+  }
+  function fmtSolar(hours) {
+    const m = Math.round(hours * 60) % 1440;
+    return `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+  }
+
+  // src/features/claim/claim.ts
+  var output = null;
+  function renderClaim(root, store, invalid2, onChange) {
+    const s = store.state;
+    output = h("div", { class: "claim-out", "aria-live": "polite" });
+    root.replaceChildren(
+      h(
+        "div",
+        { class: "row" },
+        field({
+          label: t("claim.time"),
+          info: t("claim.timeInfo"),
+          value: s.claim.time,
+          name: "claim.time",
+          invalid: invalid2.has("claim.time"),
+          inputmode: "text",
+          wide: true,
+          placeholder: "2024:07:14 15:32:10",
+          onInput: (v) => {
+            store.update((st) => st.claim.time = v);
+            onChange();
+          }
+        }),
+        field({
+          label: t("cons.zoneOffset"),
+          value: s.claim.offset,
+          name: "claim.offset",
+          invalid: invalid2.has("claim.offset"),
+          inputmode: "text",
+          placeholder: t("claim.offsetPlaceholder"),
+          info: t("claim.offsetInfo"),
+          onInput: (v) => {
+            store.update((st) => st.claim.offset = v);
+            onChange();
+          }
+        })
+      ),
+      output
+    );
+  }
+  function levelText(r2) {
+    if (r2.acceptedLevel === null) return t("claim.outside");
+    if (r2.acceptedLevel === 1) return t("claim.insideBounds");
+    return t("claim.insideLevel", { pct: (r2.acceptedLevel * 100).toFixed(r2.acceptedLevel > 0.99 ? 1 : 0) });
+  }
+  function nearest(ms, res) {
+    if (!res) return null;
+    let out = null;
+    for (const c of res.clusters) {
+      for (const w of c.windows) {
+        const d = ms < w.startMs ? w.startMs - ms : ms > w.endMs ? ms - w.endMs : 0;
+        if (!out || d < out.dist) out = { dist: d, best: w.bestMs };
+      }
+    }
+    return out;
+  }
+  function updateClaim(store, zone, lon, timeResult) {
+    if (!output) return;
+    const s = store.state;
+    if (!s.claim.time.trim()) {
+      output.replaceChildren();
+      return;
+    }
+    const r2 = checkClaim2(s);
+    if (!r2.ok) {
+      const first = r2.messages?.[0];
+      output.replaceChildren(h("p", { class: "hint" }, first ? tm(first) : r2.message));
+      return;
+    }
+    const { request, results } = r2.value;
+    const [single] = results;
+    if (single && results.length === 1) {
+      const x = single;
+      const ok2 = x.acceptedLevel !== null;
+      const n = nearest(x.utcMs, timeResult);
+      output.replaceChildren(
+        h(
+          "div",
+          { class: `verdict ${ok2 ? "good" : "bad"}` },
+          icon(ok2 ? "check" : "warn", 20),
+          h(
+            "div",
+            null,
+            h("strong", null, t(ok2 ? "claim.consistent" : "claim.inconsistent")),
+            h("p", null, t("claim.levelSentence", { time: fmtDateTime(x.utcMs, { kind: "utc" }, 0), level: levelText(x) })),
+            !ok2 && n ? h("p", null, t("claim.nearest", { time: fmtDateTime(n.best, zone, lon), dist: fmtSpan(n.dist) })) : null,
+            ...x.fit.shots.map((sf, i) => {
+              const signed = (v, d) => `${v >= 0 ? "+" : ""}${v.toFixed(d)}°`;
+              const residual = sf.residualAzimuth !== null ? `${signed(sf.residualElevation, 2)}, ${signed(sf.residualAzimuth, 1)}` : signed(sf.residualElevation, 2);
+              return h("p", { class: "hint" }, t("claim.shotDetail", {
+                shot: at(request.shots, i).label,
+                el: sf.sunElevation.toFixed(2),
+                az: sf.sunAzimuth.toFixed(1),
+                residual
+              }));
+            })
+          )
+        )
+      );
+      return;
+    }
+    const ok = results.filter((x) => x.acceptedLevel !== null);
+    const best = ok.length ? ok.reduce((a, x) => x.fit.misfit < a.fit.misfit ? x : a) : null;
+    const strip = h(
+      "div",
+      { class: "offset-strip", role: "img", "aria-label": t("claim.stripLabel", { list: ok.map((x) => formatOffset(x.offsetMin)).join(", ") || t("claim.none") }) },
+      results.map(
+        (x) => h("span", {
+          class: `cell lv-${x.acceptedLevel === null ? "out" : x.acceptedLevel >= 0.99 ? "3" : x.acceptedLevel >= 0.95 ? "2" : "1"}`,
+          title: `UTC${formatOffset(x.offsetMin)}: ${levelText(x)}`
+        })
+      )
+    );
+    const ticks = h(
+      "div",
+      { class: "offset-ticks", "aria-hidden": "true" },
+      [-12, -6, 0, 6, 12].map((v) => h("span", { style: { left: `${(v + 12) / 26 * 100}%` } }, v > 0 ? `+${v}` : v < 0 ? `−${-v}` : "0"))
+    );
+    output.replaceChildren(
+      h(
+        "div",
+        { class: `verdict ${ok.length ? "good" : "bad"}` },
+        icon(ok.length ? "check" : "warn", 20),
+        h(
+          "div",
+          null,
+          h("strong", null, best ? t("claim.compatibleIf", { offset: formatOffset(best.offsetMin) }) : t("claim.noOffset")),
+          h(
+            "div",
+            { class: "label-row" },
+            h("p", null, ok.length ? t("claim.compatibleList", { list: ranges(ok.map((x) => x.offsetMin)) }) : t("claim.wrong")),
+            info(t("claim.readingTitle"), t(ok.length ? "claim.readingOk" : "claim.readingNone"))
+          )
+        )
+      ),
+      strip,
+      ticks
+    );
+  }
+  function ranges(mins) {
+    const out = [];
+    let a = at(mins, 0);
+    let prev = a;
+    for (const m of [...mins.slice(1), Infinity]) {
+      if (m - prev <= 15) {
+        prev = m;
+        continue;
+      }
+      out.push(a === prev ? `UTC${formatOffset(a)}` : t("claim.range", { from: formatOffset(a), to: formatOffset(prev) }));
+      a = m;
+      prev = m;
+    }
+    return out.join(", ");
+  }
+  function mountClaim(cases2, session2) {
+    const body = h("div");
+    const card = h(
+      "details",
+      { class: "card result claim-card" },
+      h("summary", null, h("span", null, h("strong", null, t("claim.title")), h("small", null, t("claim.subtitle")))),
+      body
+    );
+    let timer2 = 0;
+    const schedule = () => {
+      clearTimeout(timer2);
+      timer2 = window.setTimeout(() => {
+        if (cases2.state.mode !== "time") return;
+        const b = buildTimeRequest(cases2.state);
+        const zone = b.ok ? b.req.constraints.zone : { kind: "utc" };
+        const lon = b.ok ? b.req.site.lon : 0;
+        updateClaim(cases2, zone, lon, session2.solved?.mode === "time" ? session2.solved.res : null);
+      }, 250);
+    };
+    const render = () => {
+      renderClaim(body, cases2, session2.invalid, schedule);
+      if (cases2.state.claim.time.trim()) card.open = true;
+    };
+    cases2.subscribe((_s, structural) => {
+      if (structural) render();
+      schedule();
+    });
+    session2.subscribe((st) => st.kind === "done" && schedule());
+    render();
+    return card;
+  }
+
   // src/features/examples/examples.ts
   function exampleButtons(load) {
     return h("div", { class: "example-buttons" }, EXAMPLES.map((e) => h("button", { type: "button", class: "btn ghost", title: t(e.description), onclick: () => load(e) }, t(e.label))));
@@ -17657,7 +17731,7 @@ window.__SWP_SITE__ = {
     if (c.notBefore || c.notAfter) extra.push(t("cons.dateBoundsShort"));
     return [years, zone, ...extra].join(" · ");
   }
-  function renderConstraints(root, store, invalid, guided = false) {
+  function renderConstraints(root, store, invalid2, guided = false) {
     const s = store.state;
     const upd = (fn, structural = false) => store.update(fn, structural);
     const nowY = (/* @__PURE__ */ new Date()).getUTCFullYear();
@@ -17685,7 +17759,7 @@ window.__SWP_SITE__ = {
           ].map(([v, l]) => h("option", { value: v, selected: s.cons.zoneKind === v }, t(l)))
         )
       ),
-      s.cons.zoneKind === "iana" ? field({ label: t("cons.zoneIana"), value: s.cons.zoneValue, name: "cons.zone", invalid: invalid.has("cons.zone"), inputmode: "text", placeholder: "Europe/Paris", list: "iana-zones", onInput: (v) => upd((st) => st.cons.zoneValue = v) }) : s.cons.zoneKind === "offset" ? field({ label: t("cons.zoneOffset"), value: s.cons.zoneValue, name: "cons.zone", invalid: invalid.has("cons.zone"), inputmode: "text", placeholder: "+02:00", onInput: (v) => upd((st) => st.cons.zoneValue = v) }) : null
+      s.cons.zoneKind === "iana" ? field({ label: t("cons.zoneIana"), value: s.cons.zoneValue, name: "cons.zone", invalid: invalid2.has("cons.zone"), inputmode: "text", placeholder: "Europe/Paris", list: "iana-zones", onInput: (v) => upd((st) => st.cons.zoneValue = v) }) : s.cons.zoneKind === "offset" ? field({ label: t("cons.zoneOffset"), value: s.cons.zoneValue, name: "cons.zone", invalid: invalid2.has("cons.zone"), inputmode: "text", placeholder: "+02:00", onInput: (v) => upd((st) => st.cons.zoneValue = v) }) : null
     );
     const months = h(
       "fieldset",
@@ -17722,7 +17796,7 @@ window.__SWP_SITE__ = {
           type: "time",
           value: s.cons[key],
           "data-field": `cons.${key}`,
-          "aria-invalid": invalid.has(`cons.${key}`) ? "true" : void 0,
+          "aria-invalid": invalid2.has(`cons.${key}`) ? "true" : void 0,
           oninput: (e) => upd((st) => st.cons[key] = e.target.value)
         })
       );
@@ -17742,8 +17816,8 @@ window.__SWP_SITE__ = {
         h(
           "div",
           { class: "row" },
-          field({ label: t("cons.notBefore"), value: s.cons.notBefore, name: "cons.notBefore", invalid: invalid.has("cons.notBefore"), inputmode: "text", placeholder: "2024-03-01", onInput: (v) => upd((st) => st.cons.notBefore = v) }),
-          field({ label: t("cons.notAfter"), value: s.cons.notAfter, name: "cons.notAfter", invalid: invalid.has("cons.notAfter"), inputmode: "text", placeholder: "2024-10-31 18:00", onInput: (v) => upd((st) => st.cons.notAfter = v) })
+          field({ label: t("cons.notBefore"), value: s.cons.notBefore, name: "cons.notBefore", invalid: invalid2.has("cons.notBefore"), inputmode: "text", placeholder: "2024-03-01", onInput: (v) => upd((st) => st.cons.notBefore = v) }),
+          field({ label: t("cons.notAfter"), value: s.cons.notAfter, name: "cons.notAfter", invalid: invalid2.has("cons.notAfter"), inputmode: "text", placeholder: "2024-10-31 18:00", onInput: (v) => upd((st) => st.cons.notAfter = v) })
         )
       )
     ];
@@ -17753,8 +17827,8 @@ window.__SWP_SITE__ = {
       h(
         "div",
         { class: "row" },
-        field({ label: t("field.yearFrom"), value: s.cons.yearFrom, name: "cons.yearFrom", invalid: invalid.has("cons.yearFrom"), inputmode: "numeric", onInput: (v) => upd((st) => st.cons.yearFrom = v) }),
-        field({ label: t("field.yearTo"), value: s.cons.yearTo, name: "cons.yearTo", invalid: invalid.has("cons.yearTo"), inputmode: "numeric", onInput: (v) => upd((st) => st.cons.yearTo = v) })
+        field({ label: t("field.yearFrom"), value: s.cons.yearFrom, name: "cons.yearFrom", invalid: invalid2.has("cons.yearFrom"), inputmode: "numeric", onInput: (v) => upd((st) => st.cons.yearFrom = v) }),
+        field({ label: t("field.yearTo"), value: s.cons.yearTo, name: "cons.yearTo", invalid: invalid2.has("cons.yearTo"), inputmode: "numeric", onInput: (v) => upd((st) => st.cons.yearTo = v) })
       ),
       h(
         "div",
@@ -17860,12 +17934,12 @@ window.__SWP_SITE__ = {
       ] : h("button", { type: "button", class: "btn add-shot", onclick: () => add("other") }, icon("plus"), h("span", null, h("strong", null, t("shot.addPhoto")), h("small", null, t("shot.addPhotoPlaceSub"))))
     );
   }
-  function renderShots(root, store, invalid, opts) {
+  function renderShots(root, store, invalid2, opts) {
     const s = store.state;
     const upd = (fn, structural = false) => store.update(fn, structural);
     const from = opts.from ?? 0;
     const to = opts.to ?? s.shots.length;
-    const cards = s.shots.slice(from, to).map((sh, k) => shotCard(sh, from + k, s, () => store.state, upd, invalid, opts.variant));
+    const cards = s.shots.slice(from, to).map((sh, k) => shotCard(sh, from + k, s, () => store.state, upd, invalid2, opts.variant));
     const intro = s.mode === "time" ? t("shot.introTime") : t("shot.introPlace");
     root.replaceChildren(
       ...opts.intro ? [h("p", { class: "section-intro" }, intro)] : [],
@@ -17873,7 +17947,7 @@ window.__SWP_SITE__ = {
       ...opts.add ? [addShotButtons(store)] : []
     );
   }
-  function shotCard(sh, i, s, live, upd, invalid, variant) {
+  function shotCard(sh, i, s, live, upd, invalid2, variant) {
     const guided = variant === "guided";
     const me = (st) => st.shots.find((x) => x.id === sh.id);
     const set = (fn, structural = false) => upd((st) => fn(me(st)), structural);
@@ -17887,7 +17961,7 @@ window.__SWP_SITE__ = {
       out.classList.toggle("bad", !p.ok);
       badge.textContent = relationText(cur, i, s.mode);
     };
-    const inv = (k) => invalid.has(`${sh.id}.${k}`);
+    const inv = (k) => invalid2.has(`${sh.id}.${k}`);
     const text = (key, label, opts = {}) => field({
       label,
       value: sh.f[key] ?? "",
@@ -18333,7 +18407,7 @@ window.__SWP_SITE__ = {
     return `${fmtLatLon(ll.lat, ll.lon, 4)} · ${within}${p ? ` (${t(p.label).toLowerCase()})` : ""}`;
   }
   var customRadius = false;
-  function renderSite(root, store, invalid, guided = false) {
+  function renderSite(root, store, invalid2, guided = false) {
     const s = store.state;
     const status = h("small", { class: "hint", "aria-live": "polite" });
     const showStatus = () => {
@@ -18346,7 +18420,7 @@ window.__SWP_SITE__ = {
       label: t("site.coords"),
       value: s.site.loc,
       name: "site.loc",
-      invalid: invalid.has("site.loc"),
+      invalid: invalid2.has("site.loc"),
       inputmode: "text",
       wide: true,
       placeholder: t("site.coordsPlaceholder"),
@@ -18413,7 +18487,7 @@ window.__SWP_SITE__ = {
               id: "radius-in",
               value: s.site.radius,
               inputmode: "decimal",
-              "aria-invalid": invalid.has("site.radius") ? "true" : void 0,
+              "aria-invalid": invalid2.has("site.radius") ? "true" : void 0,
               "data-field": "site.radius",
               oninput: (e) => {
                 store.update((st) => st.site.radius = e.target.value);
@@ -18441,7 +18515,7 @@ window.__SWP_SITE__ = {
     );
     showStatus();
   }
-  function renderSearchArea(root, store, invalid) {
+  function renderSearchArea(root, store, invalid2) {
     const s = store.state;
     replace(
       root,
@@ -18454,7 +18528,7 @@ window.__SWP_SITE__ = {
         label: t("area.boxLabel"),
         value: s.search.bbox,
         name: "search.bbox",
-        invalid: invalid.has("search.bbox"),
+        invalid: invalid2.has("search.bbox"),
         inputmode: "text",
         wide: true,
         placeholder: "41, -5.5, 51.5, 10",
@@ -18484,7 +18558,7 @@ window.__SWP_SITE__ = {
       else if (key.startsWith("search.")) active = 2;
     }
   }
-  function steps(store, invalid) {
+  function steps(store, invalid2) {
     const s = store.state;
     const shotReady = (i) => !!s.shots[i] && buildShadowOnly(s.shots[i]) !== null;
     const extraSummary = (st) => st.shots.length > 1 ? st.shots.slice(1).map((x, k) => shadowSummary(x, k + 1, st.mode)).join(" · ") : t("guided.nothingElse");
@@ -18494,13 +18568,13 @@ window.__SWP_SITE__ = {
           title: t("guided.where"),
           complete: (st) => parseLocation(st.site.loc) !== null,
           summary: siteSummary,
-          body: (root) => renderSite(root, store, invalid, true)
+          body: (root) => renderSite(root, store, invalid2, true)
         },
         {
           title: t("guided.measure"),
           complete: () => shotReady(0),
           summary: (st) => shadowSummary(at(st.shots, 0), 0, st.mode),
-          body: (root) => renderShots(root, store, invalid, { variant: "guided", from: 0, to: 1 })
+          body: (root) => renderShots(root, store, invalid2, { variant: "guided", from: 0, to: 1 })
         },
         {
           title: t("guided.more"),
@@ -18510,7 +18584,7 @@ window.__SWP_SITE__ = {
           body: (root) => {
             root.append(h("div", { class: "label-row" }, h("span", { class: "section-intro" }, t("guided.moreIntro")), info(t("guided.moreInfoTitle"), t("guided.moreInfo"))));
             const list = h("div", { class: "shots" });
-            renderShots(list, store, invalid, { variant: "guided", from: 1 });
+            renderShots(list, store, invalid2, { variant: "guided", from: 1 });
             root.append(list, addShotButtons(store));
           }
         },
@@ -18519,7 +18593,7 @@ window.__SWP_SITE__ = {
           optional: true,
           complete: () => true,
           summary: constraintsSummary,
-          body: (root) => renderConstraints(root, store, invalid, true)
+          body: (root) => renderConstraints(root, store, invalid2, true)
         }
       ];
     }
@@ -18528,7 +18602,7 @@ window.__SWP_SITE__ = {
         title: t("guided.measureTimed"),
         complete: (st) => shotReady(0) && !!at(st.shots, 0).time.trim(),
         summary: (st) => shadowSummary(at(st.shots, 0), 0, st.mode),
-        body: (root) => renderShots(root, store, invalid, { variant: "guided", from: 0, to: 1 })
+        body: (root) => renderShots(root, store, invalid2, { variant: "guided", from: 0, to: 1 })
       },
       {
         title: t("guided.otherPhotos"),
@@ -18538,7 +18612,7 @@ window.__SWP_SITE__ = {
         body: (root) => {
           root.append(h("div", { class: "label-row" }, h("span", { class: "section-intro" }, t("guided.otherIntro")), info(t("guided.otherInfoTitle"), t("guided.otherInfo"))));
           const list = h("div", { class: "shots" });
-          renderShots(list, store, invalid, { variant: "guided", from: 1 });
+          renderShots(list, store, invalid2, { variant: "guided", from: 1 });
           root.append(list, addShotButtons(store));
         }
       },
@@ -18547,18 +18621,18 @@ window.__SWP_SITE__ = {
         optional: true,
         complete: () => true,
         summary: (st) => st.search.kind === "world" ? t("area.world") : t("guided.areaBox", { box: st.search.bbox }),
-        body: (root) => renderSearchArea(root, store, invalid)
+        body: (root) => renderSearchArea(root, store, invalid2)
       }
     ];
   }
-  function renderGuided(root, store, invalid, rerender) {
+  function renderGuided(root, store, invalid2, rerender) {
     const s = store.state;
     if (lastMode !== s.mode) {
       active = void 0;
       visited.clear();
       lastMode = s.mode;
     }
-    const list = steps(store, invalid);
+    const list = steps(store, invalid2);
     if (active === void 0) {
       const firstMissing = list.findIndex((st) => !st.optional && !st.complete(s));
       active = firstMissing === -1 ? null : firstMissing;
@@ -18656,14 +18730,14 @@ window.__SWP_SITE__ = {
   }
 
   // src/features/inputs/panels/advanced.ts
-  function renderAdvanced(root, store, invalid) {
+  function renderAdvanced(root, store, invalid2) {
     const s = store.state;
     root.replaceChildren(
       h(
         "div",
         { class: "row" },
-        field({ label: t("field.pressure"), value: s.adv.pressure, name: "adv.pressure", invalid: invalid.has("adv.pressure"), suffix: "hPa", onInput: (v) => store.update((st) => st.adv.pressure = v) }),
-        field({ label: t("field.temperature"), value: s.adv.temp, name: "adv.temp", invalid: invalid.has("adv.temp"), suffix: "°C", onInput: (v) => store.update((st) => st.adv.temp = v) })
+        field({ label: t("field.pressure"), value: s.adv.pressure, name: "adv.pressure", invalid: invalid2.has("adv.pressure"), suffix: "hPa", onInput: (v) => store.update((st) => st.adv.pressure = v) }),
+        field({ label: t("field.temperature"), value: s.adv.temp, name: "adv.temp", invalid: invalid2.has("adv.temp"), suffix: "°C", onInput: (v) => store.update((st) => st.adv.temp = v) })
       ),
       h(
         "div",
@@ -18675,7 +18749,7 @@ window.__SWP_SITE__ = {
         label: t("adv.deltaT"),
         value: s.adv.deltaT,
         name: "adv.deltaT",
-        invalid: invalid.has("adv.deltaT"),
+        invalid: invalid2.has("adv.deltaT"),
         suffix: "s",
         placeholder: t("adv.deltaTPlaceholder"),
         info: t("adv.deltaTInfo"),
@@ -18702,7 +18776,7 @@ window.__SWP_SITE__ = {
     };
     const render = () => {
       const s = cases2.state;
-      const invalid = deps.invalid();
+      const invalid2 = deps.invalid();
       if (!view2.expert) {
         if (!view2.started) {
           renderLanding(host, (m) => {
@@ -18714,18 +18788,18 @@ window.__SWP_SITE__ = {
           return;
         }
         const steps2 = h("div", { class: "stepper" });
-        renderGuided(steps2, cases2, invalid, render);
+        renderGuided(steps2, cases2, invalid2, render);
         host.replaceChildren(steps2, settingsPanel());
         return;
       }
       const blocks = [];
       const shots = h("div", { class: "shots" });
-      renderShots(shots, cases2, invalid, { variant: "expert", intro: true, add: true });
+      renderShots(shots, cases2, invalid2, { variant: "expert", intro: true, add: true });
       if (s.mode === "time") {
         const site = h("div");
-        renderSite(site, cases2, invalid);
+        renderSite(site, cases2, invalid2);
         const cons = h("div");
-        renderConstraints(cons, cases2, invalid);
+        renderConstraints(cons, cases2, invalid2);
         blocks.push(
           panel(1, t("panel.where"), site, "p-site"),
           panel(2, t("panel.shadows"), shots, "p-shots"),
@@ -18733,7 +18807,7 @@ window.__SWP_SITE__ = {
         );
       } else {
         const area = h("div");
-        renderSearchArea(area, cases2, invalid);
+        renderSearchArea(area, cases2, invalid2);
         blocks.push(panel(1, t("panel.shadowsTimes"), shots, "p-shots"), panel(2, t("panel.area"), area, "p-area"));
       }
       blocks.push(settingsPanel());
@@ -18751,9 +18825,9 @@ window.__SWP_SITE__ = {
       field2.scrollIntoView({ block: "center", behavior: "smooth" });
     };
     const markInvalid = (errors) => {
-      const invalid = new Set(errors.map((e) => e.key));
+      const invalid2 = new Set(errors.map((e) => e.key));
       host.querySelectorAll("[data-field]").forEach((input) => {
-        const bad = invalid.has(input.dataset.field) && input.value.trim() !== "";
+        const bad = invalid2.has(input.dataset.field) && input.value.trim() !== "";
         if (bad) input.setAttribute("aria-invalid", "true");
         else input.removeAttribute("aria-invalid");
       });
@@ -20022,13 +20096,7 @@ window.__SWP_SITE__ = {
   }
   async function exportReport(state, solved) {
     const inputs2 = JSON.stringify(state);
-    const results = solved?.mode === "time" ? {
-      // WHY drop `probability`: with declared bounds it is only a duration share, and a
-      // forensic report must not present it as a probability.
-      clusters: solved.res.clusters.map(({ probability: _p, ...c }) => c),
-      warnings: solved.res.warnings,
-      observations: solved.res.observations
-    } : solved?.mode === "place" ? { regions: solved.res.regions.map(({ probability: _p, ...r2 }) => r2), resolutionDeg: solved.res.resolutionDeg, cellCount: solved.res.cells.length, cells: solved.res.cells, warnings: solved.res.warnings, observations: solved.res.observations } : null;
+    const results = solved?.mode === "time" ? timeResults(solved.res) : solved?.mode === "place" ? placeResults(solved.res) : null;
     const site = platform().site;
     const report = {
       application: { name: site.title, version: site.version, buildDate: site.date, edition: site.mode === "single" ? "offline copy" : "site", url: location.origin + location.pathname },

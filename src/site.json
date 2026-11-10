@@ -6,6 +6,9 @@
   "themeColor": "#184f95",
   "siteUrl": "https://shadow-clock.forandchips.com/",
   "downloadName": "shadowclock.html",
+  "cli": {
+    "entry": "src/cli/main.ts"
+  },
   "support": {
     "url": "https://buymeacoffee.com/forandchips"
   },
